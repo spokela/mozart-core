@@ -98,8 +98,7 @@ class IRCu extends Adapter
         else
           modes     = ""
 
-        u = @userAdd split[2], split[5], split[6], @doubleDotStr(split, realNameIdx), server, split[4]
-        u.numeric = split[realNameIdx-1]
+        u = @userAdd split[2], split[5], split[6], @doubleDotStr(split, realNameIdx), server, split[4], split[realNameIdx-1]
         u.changeModes "#{ modes } #{ account }"
 
       # it's a nickname change
@@ -143,8 +142,9 @@ class IRCu extends Adapter
     super server
     return server
 
-  userAdd: (nickname, ident, hostname, realname, server, connectionTs) ->
+  userAdd: (nickname, ident, hostname, realname, server, connectionTs, numeric) ->
     user = new User(nickname; ident, hostname, realname, server, connectionTs)
+    user.numeric = numeric
     super user
     return user
 
