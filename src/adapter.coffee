@@ -12,7 +12,8 @@ IRC_EVENTS = {
   SERVER_QUIT:        "irc:server-quit",
   USER_REGISTERED:    "irc:user-registered",
   USER_QUIT:          "irc:user-quit",
-  USER_NICKCHANGE:    "irc:user-nickchange"
+  USER_NICKCHANGE:    "irc:user-nickchange",
+  USER_MODESCHANGE:   "irc:user-modeschange"
 }
 
 class Adapter extends EventEmitter
@@ -43,6 +44,14 @@ class Adapter extends EventEmitter
       else
         @_preParsedTxt += data.charAt(num);
       num++
+
+  doubleDotStr: (splitted, index) ->
+    next = []
+    while index <= splitted.length
+      next.push splitted[index];
+      index++
+
+    return next.join(' ').substr(1).trim()
 
   send: (line) ->
 
@@ -88,6 +97,19 @@ class Adapter extends EventEmitter
     if server.isUplink()
       @emit IRC_EVENTS.UPLINK_CONNECTED;
 
+  umodesChange: (sender, user, modes) ->
+    if user == false || sender == false
+      throw new Error('invalid sender or user');
+
+    user.changeModes(modes);
+    @emit IRC_EVENTS.USER_MODESCHANGE, user, modes, sender
+
   disconnect: ->
+
+  findUserByNickname: (nickname) ->
+    for user in @users
+      if user.nickname == nickname
+        return user
+    return false
 
 module.exports = Adapter
