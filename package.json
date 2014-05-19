@@ -1,0 +1,40 @@
+{
+  "name": "mozart-core",
+  "version": "1.0.0",
+
+  "author": "neiluj",
+
+  "keywords": [
+    "spokela",
+    "bot",
+    "irc",
+    "services"
+  ],
+
+  "description": "modulables IRC services for node",
+
+  "licenses": [{
+    "type": "GPL",
+    "url": "https://raw.github.com/spokela/mozart-core/master/LICENSE"
+  }],
+
+  "repository" : {
+    "type": "git",
+    "url": "https://github.com/spokela/mozart-core.git"
+  },
+
+  "dependencies": {
+    "coffee-script":      "1.6.3"
+  },
+
+  "engines": {
+    "node": ">= 0.8.x",
+    "npm":  ">= 1.1.x"
+  },
+
+  "main": "./index",
+
+  "bin": {
+    "mozart": "./bin/mozart"
+  }
+}
