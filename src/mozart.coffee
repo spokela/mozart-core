@@ -12,9 +12,9 @@ class Mozart extends EventEmitter
   @zmq
 
   constructor: (@config, @adapter) ->
-    console.log "starting mozart-core ..."
 
   start: ->
+    console.log "starting mozart-core ..."
     self = @
     @socket = net.connect {port: @config.irc.port, host: @config.irc.hostname}, () ->
       self.adapter.init self.socket

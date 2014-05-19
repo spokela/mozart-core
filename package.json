@@ -24,7 +24,8 @@
   },
 
   "dependencies": {
-    "coffee-script":      "1.6.3"
+    "coffee-script": "1.6.3",
+    "node-uuid": "1.4.1"
   },
 
   "engines": {

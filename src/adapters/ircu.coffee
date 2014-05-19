@@ -6,13 +6,22 @@ Adapter = require '../adapter'
 {Server, User} = require '../structs'
 
 P10_TOKENS = {
+  # PING? PONG!
   PING:           "G"
   PONG:           "Z",
+
+  # SERVER TOKENS
   SERVER:         "SERVER",
   SERVER_SERVER:  "S",
+  SERVER_QUIT:    "SQ",
   END_BURST:      "EB",
+  END_ACK:        "EA",
+
+  # USER TOKENS
   USER:           "N",
-  MODE:           "M"
+  MODE:           "M",
+  USER_QUIT:      "Q",
+  USER_AWAY:      "A"
 }
 
 class IRCu extends Adapter
@@ -20,10 +29,7 @@ class IRCu extends Adapter
     ts = Math.round(new Date()/1000);
     @send "PASS "+ @config.password
     @send "SERVER #{ @config.serverName } 1 #{ ts } #{ ts } J10 5AEEE +s :#{ @config.serverDesc }"
-    server = new Server(@config.serverName, 0, ts, ts, @config.serverDesc, false)
-    server.numeric = "5AEEE"
-
-    super server
+    @serverAdd @config.serverName, 0, ts, ts, @config.serverDesc, "5AEEE", false
 
   send: (line) ->
     console.log "> OUT: "+ line
@@ -44,14 +50,34 @@ class IRCu extends Adapter
     # SERVER Dev1.Eu.Spokela.Com 1 1400499149 1400505006 J10 ABA]] +h6 :Spokela, Dev server 1
     # This is our uplink \o/
     if split[0] == P10_TOKENS.SERVER
-      s = @serverAdd split[1], split[2], split[3], split[4], @doubleDotStr(split, 8), split[5] == "J10" ? false : true
-      s.numeric = split[6];
+      s = @serverAdd split[1], split[2], split[3], split[4], @doubleDotStr(split, 8), split[6], split[5] == "J10" ? false : true
       @findMyServer().parent = s;
 
     # AB EB
     if split[1] == P10_TOKENS.END_BURST
       server = @findServerByShortNumeric split[0]
       @endOfBurst server
+      @serverSend "#{ P10_TOKENS.END_ACK }"
+
+    # AB SQ AD 12345670 :reason
+    # ADAAD SQ Dev2.Eu.Spokela.Com 0 :neiluj
+    if split[1] == P10_TOKENS.SERVER_QUIT
+      if split[0].length > 2
+        sender = @findUserByNumeric split[0]
+      else
+        sender = @findServerByShortNumeric split[0]
+
+      if split[2].indexOf('.') != false
+        server = @findServerByName split[2]
+      else
+        server = @findServerByShortNumeric split[2]
+
+      if split.length > 3 && split[3].indexOf(':') == 0
+        reason = @doubleDotStr(split, 3)
+      else
+        reason = undefined
+
+      @serverQuit server, sender, reason
 
     # AB N neiluj 1 1400499156 ~neiluj Dev1.Eu.Spokela.Com +oiwg B]AAAB ABAAA :julien
     # AB N neiluJ 1 1400509253 ~neiluj Dev1.Eu.Spokela.Com B]AAAB ABAAA :julien
@@ -62,7 +88,7 @@ class IRCu extends Adapter
         server      = @findServerByShortNumeric split[0]
         modes       = split[7]
         realNameIdx = 9
-        account     = false
+        account     = ""
 
         if modes.substr(0,1) == '+'
           realNameIdx++
@@ -73,9 +99,8 @@ class IRCu extends Adapter
           modes     = ""
 
         u = @userAdd split[2], split[5], split[6], @doubleDotStr(split, realNameIdx), server, split[4]
-        u.account = account
-        u.modes   = modes
         u.numeric = split[realNameIdx-1]
+        u.changeModes "#{ modes } #{ account }"
 
       # it's a nickname change
       else
@@ -89,11 +114,32 @@ class IRCu extends Adapter
         sender = @findServerByShortNumeric split[0]
 
       target  = @findUserByNickname split[2]
-      modes   = @doubleDotStr split, 3
+      modes   = @doubleDotStr(split, 3)
       @umodesChange sender, target, modes
 
-  serverAdd: (serverName, hops, serverTs, linkTs, numeric, description) ->
-    server = new Server(serverName, hops, serverTs, linkTs, numeric, description)
+    # ADAAB Q :Quit: byebye
+    if split[1] == P10_TOKENS.USER_QUIT
+      if split.length > 2 && split[2].indexOf(':') == 0
+        reason = @doubleDotStr(split, 2)
+      else
+        reason = undefined
+
+      @userQuit @findUserByNumeric split[0], reason
+
+    # ADAAB A :brb
+    if split[1] == P10_TOKENS.USER_AWAY
+      if split.length > 2 && split[2].indexOf(':') == 0
+        reason = @doubleDotStr(split, 2)
+      else
+        reason = false
+
+      u = @findUserByNumeric split[0]
+      @userAway u, reason
+      console.log u
+
+  serverAdd: (serverName, hops, serverTs, linkTs, description, numeric, bursted = false) ->
+    server = new Server serverName, hops, serverTs, linkTs, description, bursted
+    server.numeric = numeric
     super server
     return server
 
@@ -113,19 +159,19 @@ class IRCu extends Adapter
     @serverSend "#{ P10_TOKENS.PONG } #{ timestamp }"
 
   findServerByShortNumeric: (shortNumeric) ->
-    for server in @servers
+    for id, server of @servers
       if server.numeric.substr(0,shortNumeric.length) == shortNumeric
         return server
     return false
 
   findMyServer: ->
-    for server in @servers
+    for id, server of @servers
       if server.hops == 0
         return server
     return false
 
   findUserByNumeric: (numeric) ->
-    for user in @users
+    for id, user of @users
       if user.numeric == numeric
         return user
     return false

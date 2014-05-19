@@ -5,15 +5,21 @@
 {EventEmitter} = require 'events'
 
 IRC_EVENTS = {
+  # Mozart-Specific Events
   UPLINK_CONNECTED:   "irc:uplink-connected",
+
+  # Server Events
   PING:               "irc:ping",
   SERVER_ENDBURST:    "irc:server-endburst",
   SERVER_REGISTERED:  "irc:server-registered",
   SERVER_QUIT:        "irc:server-quit",
+
+  # User Events
   USER_REGISTERED:    "irc:user-registered",
   USER_QUIT:          "irc:user-quit",
   USER_NICKCHANGE:    "irc:user-nickchange",
-  USER_MODESCHANGE:   "irc:user-modeschange"
+  USER_MODESCHANGE:   "irc:user-modeschange",
+  USER_AWAY:          "irc:user-away"
 }
 
 class Adapter extends EventEmitter
@@ -31,9 +37,6 @@ class Adapter extends EventEmitter
       console.log "socket end";
 
     @connect()
-
-  connect: (server) ->
-    @servers.push server
 
   preParse: (data) ->
     num = 0
@@ -67,22 +70,54 @@ class Adapter extends EventEmitter
 
   serverAdd: (server) ->
     if server == false
-      throw new Error('invalid server');
+      throw new Error 'invalid server'
 
-    @servers.push server
+    @servers[server.id] = server
     @emit IRC_EVENTS.SERVER_REGISTERED, server
+
+  serverQuit: (server, sender, reason) ->
+    if server == false
+      throw new Error 'invalid server'
+
+    @emit IRC_EVENTS.SERVER_QUIT, server, sender, reason
+
+    for id, serv of @servers
+      if serv.parent.id == server.id
+        @deleteUsersFromServer(serv, reason)
+        delete @servers[server.id]
+
+    @deleteUsersFromServer(server, reason)
+    delete @servers[server.id]
 
   userAdd: (user) ->
     if user == false || user.server == false
-      throw new Error('invalid user or server');
+      throw new Error 'invalid user or server'
 
     user.server.users++
-    @users.push user
+    @users[user.id] = user
     @emit IRC_EVENTS.USER_REGISTERED, user
+
+  userQuit: (user, reason) ->
+    if user == false
+      throw new Error 'invalid user'
+
+    user.server.users--
+    if user.isOper
+      user.server.opers--
+
+    delete @users[user.id]
+    @emit IRC_EVENTS.USER_QUIT, user, reason
+
+  userAway: (user, reason) ->
+    if user == false
+      throw new Error 'invalid user'
+
+    user.away = reason
+    @emit IRC_EVENTS.USER_AWAY, user, reason
 
   nickChange: (user, newNick) ->
     if user == false
-      throw new Error('invalid user');
+      throw new Error 'invalid user'
 
     user.lastNickname = user.nickname
     user.nickname = newNick
@@ -90,7 +125,7 @@ class Adapter extends EventEmitter
 
   endOfBurst: (server) ->
     if server == false
-      throw new Error('invalid server');
+      throw new Error 'invalid server'
 
     server.bursted = true;
     @emit IRC_EVENTS.SERVER_ENDBURST, server
@@ -99,17 +134,28 @@ class Adapter extends EventEmitter
 
   umodesChange: (sender, user, modes) ->
     if user == false || sender == false
-      throw new Error('invalid sender or user');
+      throw new Error 'invalid sender or user'
 
-    user.changeModes(modes);
+    user.changeModes modes;
     @emit IRC_EVENTS.USER_MODESCHANGE, user, modes, sender
 
   disconnect: ->
 
   findUserByNickname: (nickname) ->
-    for user in @users
+    for id, user of @users
       if user.nickname == nickname
         return user
     return false
+
+  findServerByName: (serverName) ->
+    for id, server of @servers
+      if server.name == serverName
+        return server
+    return false
+
+  deleteUsersFromServer: (server, reason) ->
+    for id, user of @users
+      if user.server != undefined && user.server.id == server.id
+        @userQuit user, reason
 
 module.exports = Adapter
