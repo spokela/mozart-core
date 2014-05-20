@@ -20,7 +20,8 @@ IRC_EVENTS = {
   USER_QUIT:          "irc:user-quit",
   USER_NICKCHANGE:    "irc:user-nickchange",
   USER_MODESCHANGE:   "irc:user-modeschange",
-  USER_AWAY:          "irc:user-away"
+  USER_AWAY:          "irc:user-away",
+  USER_AUTH:          "irc:user-auth",
 
   # Channel Events
   CHANNEL_BURST:      "irc:channel-burst",
@@ -28,7 +29,12 @@ IRC_EVENTS = {
   CHANNEL_JOIN:       "irc:channel-join",
   CHANNEL_PART:       "irc:channel-part",
   CHANNEL_EMPTY:      "irc:channel-empty",
-  CHANNEL_KICK:       "irc:channel-kick"
+  CHANNEL_KICK:       "irc:channel-kick",
+  CHANNEL_UMODE_CHANGE:   "irc:channel-umode-change",
+  CHANNEL_BAN_ADD:    "irc:channel-ban-add"
+  CHANNEL_BAN_REMOVE: "irc:channel-ban-remove",
+  CHANNEL_MODES_CHANGE:   "irc:channel-modes-change",
+  CHANNEL_TOPIC_CHANGE:   "irc:channel-topic-change"
 }
 
 class Adapter extends EventEmitter
@@ -115,9 +121,9 @@ class Adapter extends EventEmitter
     if user.isOper
       user.server.opers--
 
-    for id, channel of user.channels
-      channel.removeUser user
-      if channel.isEmpty()
+    for id, channelUser of user.channels
+      channelUser.channel.removeUser user
+      if channelUser.channel.isEmpty()
         delete @channels[channel.id]
         @emit IRC_EVENTS.CHANNEL_EMPTY, channel
 
@@ -130,6 +136,13 @@ class Adapter extends EventEmitter
 
     user.away = reason
     @emit IRC_EVENTS.USER_AWAY, user, reason
+
+  userAuth: (sender, user, account) ->
+    if user == false
+      throw new Error 'invalid user'
+
+    user.account = account
+    @emit IRC_EVENTS.USER_AUTH, user, account, sender
 
   nickChange: (user, newNick) ->
     if user == false
@@ -191,6 +204,46 @@ class Adapter extends EventEmitter
     if channel.isEmpty()
       delete @channels[channel.id]
       @emit IRC_EVENTS.CHANNEL_EMPTY, channel
+
+  channelUsermodeChange: (sender, channel, user, modes) ->
+    if sender == false || channel == false || user == false
+      throw new Error 'invalid sender, channel or user'
+
+    channel.users[user.id].changeModes(modes)
+    @emit IRC_EVENTS.CHANNEL_UMODE_CHANGE, channel, user, sender, modes
+
+  channelAddBan: (sender, channel, mask, ts) ->
+    if sender == false || channel == false
+      throw new Error 'invalid channel or sender'
+
+    ban = channel.addBan mask, sender, ts
+    @emit IRC_EVENTS.CHANNEL_BAN_ADD, channel, ban, sender
+
+  channelRemoveBan: (sender, channel, mask) ->
+    if sender == false || channel == false
+      throw new Error 'invalid channel or sender'
+
+    ban = channel.removeBan mask
+    @emit IRC_EVENTS.CHANNEL_BAN_REMOVE, channel, ban, sender
+
+  channelModesChange: (sender, channel, modes, ts) ->
+    if sender == false || channel == false
+      throw new Error 'invalid channel or sender'
+
+    # don't do nothing here because of protocol-specific modes
+    @emit IRC_EVENTS.CHANNEL_MODES_CHANGE, channel, modes, sender, ts
+
+  channelTopicChange: (sender, channel, topic, ts) ->
+    if sender == false || channel == false
+      throw new Error 'invalid channel or sender'
+
+    if topic.length <= 0
+      topic = null
+
+    channel.topic = topic
+    channel.topicTs = ts
+
+    @emit IRC_EVENTS.CHANNEL_TOPIC_CHANGE, channel, topic, sender, ts
 
   disconnect: ->
 

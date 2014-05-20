@@ -3,7 +3,7 @@
 # (c) Spokela 2014
 #
 Adapter = require '../adapter'
-{Server, User, Channel, ChannelBan} = require '../structs'
+{Server, User} = require '../structs'
 
 P10_TOKENS = {
   # PING? PONG!
@@ -20,16 +20,21 @@ P10_TOKENS = {
 
   # USER TOKENS
   USER:           "N",
-  MODE:           "M",
   USER_QUIT:      "Q",
   USER_AWAY:      "A",
+  USER_ACCOUNT:   "AC",
+
+  MODE:           "M",
 
   # CHANNEL TOKENS
   CHAN_BURST:     "B",
   CHAN_CREATE:    "C",
   CHAN_JOIN:      "J",
   CHAN_PART:      "L",
-  CHAN_KICK:      "K"
+  CHAN_KICK:      "K",
+  CHAN_TOPIC:     "T",
+  # add support for some popular forks of ircu (nefarious/asuka)
+  CHAN_TBURST:    "TB"
 }
 
 class IRCu extends Adapter
@@ -124,6 +129,12 @@ class IRCu extends Adapter
       modes   = @doubleDotStr(split, 3)
       @umodesChange sender, target, modes
 
+    # AB AC AZAAA neiluJ
+    if split[1] == P10_TOKENS.USER_ACCOUNT
+      sender = @findServerByNumeric split[0]
+      target  = @findUserByNumeric split[2]
+      @userAuth sender, target, split[3]
+
     # ADAAB Q :Quit: byebye
     if split[1] == P10_TOKENS.USER_QUIT
       if split.length > 2 && split[2].indexOf(':') == 0
@@ -170,7 +181,7 @@ class IRCu extends Adapter
         else
           u = @findUserByNumeric(user)
           umods = ""
-        chan.addUser u, umods, split[3]
+        chan.addUser u, umods.trim(), split[3]
 
       if split[usersIdx+1] != undefined && split[usersIdx+1].indexOf(':') == 0
         bans = @doubleDotStr(split, usersIdx+1).substr(1).split(' ')
@@ -208,7 +219,7 @@ class IRCu extends Adapter
       u = @findUserByNumeric split[0]
 
       # user left all channels
-      if split[2] == "0"
+      if split[2].toString().trim() == "0"
         for id,channel of u.channels
           @channelPart channel, u, 'Leaving all channels'
         return
@@ -252,6 +263,76 @@ class IRCu extends Adapter
         reason = undefined
 
       @channelKick(@findUserByNumeric(split[0]), @getChannelByName(split[2], false), @findUserByNumeric(split[3]), reason)
+
+    # ABAAA M #pwet +v ABAAC 1400587586
+    # ABAAA M #opers +bvv *!*@lamer.com ABAAA ABAAC 1400587572
+    if split[1] == P10_TOKENS.MODE && split[2].indexOf('#') == 0
+      if split[0].length > 2
+        sender = @findUserByNumeric split[0]
+      else
+        sender = @findServerByNumeric split[0]
+
+      channel = @getChannelByName(split[2], false)
+      modes   = split[3]
+      operator = ""
+      argsIdx = 4
+      i = 0
+      while i <= modes.length
+        curr = modes.charAt(i)
+        if curr == '+' || curr == '-'
+          operator = curr
+          i++
+          continue
+
+        else if curr == 'k' && operator == '+'
+          channel.key = split[argsIdx]
+          argsIdx++
+        else if curr == 'k' && operator == '-'
+          channel.key = null
+          argsIdx++
+        else if curr == 'l' && operator == '+'
+          channel.limit = split[argsIdx]
+          argsIdx++
+        else if curr == 'l' && operator == '-'
+          channel.limit = null
+        # halfops is not supported by IRCu but may be on some forks so lets handle it anyway
+        else if curr == 'o' || curr == 'v' || curr == 'h'
+          u = @findUserByNumeric(split[argsIdx])
+          argsIdx++
+          @channelUsermodeChange(sender, channel, u, "#{ operator.toString() + curr.toString() }")
+        else if curr == 'b'
+          mask = split[argsIdx]
+          argsIdx++
+          if operator == '+'
+            @channelAddBan sender, channel, mask, Math.round(new Date()/1000)
+          else
+            @channelRemoveBan sender, channel, mask
+        else if operator == '+'
+          channel.modes += curr
+        else
+          channel.modes = channel.modes.replace curr, ''
+        i++
+      @channelModesChange sender, channel, modes, split[argsIdx]
+
+    # ABAAA T #opers 1400587572 1400592155 :topic !!!
+    if split[1] == P10_TOKENS.CHAN_TOPIC
+      if split[0].length > 2
+        sender = @findUserByNumeric split[0]
+      else
+        sender = @findServerByNumeric split[0]
+
+      channel = @getChannelByName split[2], false
+      ts = split[4]
+      topic = @doubleDotStr(split, 5).trim()
+      @channelTopicChange sender, channel, topic, ts
+
+    if split[1] == P10_TOKENS.CHAN_TBURST
+      sender = @findServerByNumeric split[0]
+      channel = @getChannelByName split[2], false
+      ts = split[4]
+      topic = @doubleDotStr(split, 5).trim()
+      channel.topic = topic
+      channel.topicTs = ts
 
   serverAdd: (serverName, hops, serverTs, linkTs, description, numeric, bursted = false) ->
     server = new Server serverName, hops, serverTs, linkTs, description, bursted

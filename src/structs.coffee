@@ -38,6 +38,10 @@ class User
       curr = args[0].charAt i
       if curr == '+' || curr == '-'
         operator = curr
+        i++
+        continue;
+      # specific IRCu
+      # @todo remove this code from here
       else if curr == 'r' && operator == '+'
         @account = args[argsIdx]
         argsIdx++
@@ -62,6 +66,7 @@ class Channel
     @bans     = []
     @limit    = 0
     @key      = null
+    @topicTs  = 0
 
   changeModes: (modes) ->
     if modes.indexOf(' ') != -1
@@ -76,6 +81,8 @@ class Channel
       curr = args[0].charAt(i)
       if curr == '+' || curr == '-'
         operator = curr
+        i++
+        continue
       else if curr == 'k' && operator == '+'
         @key = args[argsIdx]
         argsIdx++
@@ -95,8 +102,8 @@ class Channel
       i++
 
   addUser: (user, modes, timestamp) ->
-    @users[user.id] = new ChannelUser(user, modes, timestamp)
-    user.channels[@id] = @
+    @users[user.id] = new ChannelUser(@, user, modes, timestamp)
+    user.channels[@id] = @users[user.id]
 
   removeUser: (user) ->
     delete @users[user.id]
@@ -111,11 +118,34 @@ class Channel
   addBan: (mask, setter, timestamp) ->
     if !timestamp
       timestamp = @timestamp
-    @bans.push new ChannelBan(mask, setter, timestamp)
+    ban = new ChannelBan(mask, setter, timestamp)
+    @bans[mask] = ban
+    return ban
+
+  removeBan: (mask) ->
+    if @bans[mask] == undefined
+      return false;
+
+    ban = @bans[mask]
+    delete @bans[mask]
+    return ban
 
 class ChannelUser
-  constructor: (@user, @modes = "", @joinTs = 0) ->
+  constructor: (@channel, @user, @modes = "", @joinTs = 0) ->
     @id       = uuid.v4()
+
+  changeModes: (modes) ->
+    operator = ""
+    i = 0
+    while i <= modes.length
+      curr = modes.charAt(i)
+      if curr == '+' || curr == '-'
+        operator = curr
+      else if operator == '+'
+        @modes += curr
+      else
+        @modes = @modes.replace curr, ''
+      i++
 
 class ChannelBan
   constructor: (@mask, @setter, @timestamp = 0) ->

@@ -5,7 +5,8 @@
         "serverName": "services.spoke.la",
         "serverDesc": "Spokela Services",
         "password": "mozart",
-        "numeric": "5AEEE"
+        "numeric": "5AEEE",
+        "version": "mozart-core/1.0 (c) spokela.com"
     },
     "redis": {
 
