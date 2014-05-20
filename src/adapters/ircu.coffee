@@ -3,7 +3,7 @@
 # (c) Spokela 2014
 #
 Adapter = require '../adapter'
-{Server, User} = require '../structs'
+{Server, User, Channel, ChannelBan} = require '../structs'
 
 P10_TOKENS = {
   # PING? PONG!
@@ -12,6 +12,7 @@ P10_TOKENS = {
 
   # SERVER TOKENS
   SERVER:         "SERVER",
+  PASS:           "PASS",
   SERVER_SERVER:  "S",
   SERVER_QUIT:    "SQ",
   END_BURST:      "EB",
@@ -21,15 +22,22 @@ P10_TOKENS = {
   USER:           "N",
   MODE:           "M",
   USER_QUIT:      "Q",
-  USER_AWAY:      "A"
+  USER_AWAY:      "A",
+
+  # CHANNEL TOKENS
+  CHAN_BURST:     "B",
+  CHAN_CREATE:    "C",
+  CHAN_JOIN:      "J",
+  CHAN_PART:      "L",
+  CHAN_KICK:      "K"
 }
 
 class IRCu extends Adapter
   connect: ->
     ts = Math.round(new Date()/1000);
-    @send "PASS "+ @config.password
-    @send "SERVER #{ @config.serverName } 1 #{ ts } #{ ts } J10 5AEEE +s :#{ @config.serverDesc }"
-    @serverAdd @config.serverName, 0, ts, ts, @config.serverDesc, "5AEEE", false
+    @send "#{ P10_TOKENS.PASS } #{ @config.password }"
+    @send "#{ P10_TOKENS.SERVER } #{ @config.serverName } 1 #{ ts } #{ ts } J10 #{ @config.numeric } +s :#{ @config.serverDesc }"
+    @serverAdd @config.serverName, 0, ts, ts, @config.serverDesc, @config.numeric, false
 
   send: (line) ->
     console.log "> OUT: "+ line
@@ -55,7 +63,7 @@ class IRCu extends Adapter
 
     # AB EB
     if split[1] == P10_TOKENS.END_BURST
-      server = @findServerByShortNumeric split[0]
+      server = @findServerByNumeric split[0]
       @endOfBurst server
       @serverSend "#{ P10_TOKENS.END_ACK }"
 
@@ -65,12 +73,12 @@ class IRCu extends Adapter
       if split[0].length > 2
         sender = @findUserByNumeric split[0]
       else
-        sender = @findServerByShortNumeric split[0]
+        sender = @findServerByNumeric split[0]
 
       if split[2].indexOf('.') != false
         server = @findServerByName split[2]
       else
-        server = @findServerByShortNumeric split[2]
+        server = @findServerByNumeric split[2]
 
       if split.length > 3 && split[3].indexOf(':') == 0
         reason = @doubleDotStr(split, 3)
@@ -85,7 +93,7 @@ class IRCu extends Adapter
     if split[1] == P10_TOKENS.USER
       # it's a new user connected
       if split[4] != undefined
-        server      = @findServerByShortNumeric split[0]
+        server      = @findServerByNumeric split[0]
         modes       = split[7]
         realNameIdx = 9
         account     = ""
@@ -110,7 +118,7 @@ class IRCu extends Adapter
       if split[0].length > 2
         sender = @findUserByNumeric split[0]
       else
-        sender = @findServerByShortNumeric split[0]
+        sender = @findServerByNumeric split[0]
 
       target  = @findUserByNickname split[2]
       modes   = @doubleDotStr(split, 3)
@@ -136,6 +144,115 @@ class IRCu extends Adapter
       @userAway u, reason
       console.log u
 
+    # AB B #opers 1400499156 ABAAB,ABAAA:o
+    # AB B #opers 1400499156 ABAAB,ABAAA:o :%*!*@lamer.com
+    # AB B #opers 1400499156 +tn ABAAB,ABAAA:o :%*!*@lamer.com
+    if split[1] == P10_TOKENS.CHAN_BURST
+      chan = @getChannelByName split[2], true
+      chan.timestamp = split[3]
+      usersIdx = 4
+      modes = null
+      if split[4].indexOf('+') == 0
+        usersIdx++;
+        modes = split[4]
+        if modes.indexOf('k') != -1
+          usersIdx++
+          modes += ' '+ split[5]
+        if modes.indexOf('l') != -1
+          usersIdx++
+          modes += ' '+ split[6]
+
+      users = split[usersIdx].split(',')
+      for user in users
+        if user.indexOf(':') != -1
+          u = @findUserByNumeric(user.split(':')[0])
+          umods = user.split(':')[1]
+        else
+          u = @findUserByNumeric(user)
+          umods = ""
+        chan.addUser u, umods, split[3]
+
+      if split[usersIdx+1] != undefined && split[usersIdx+1].indexOf(':') == 0
+        bans = @doubleDotStr(split, usersIdx+1).substr(1).split(' ')
+      else
+        bans = []
+
+      for ban in bans
+        chan.addBan ban
+
+      if modes != null
+        chan.changeModes modes
+
+      @channelAdd chan, true
+
+    # ABAAA C #powah 1400577592
+    # ABAAA C #pw1,#pw2 1400577796
+    if split[1] == P10_TOKENS.CHAN_CREATE
+      if split[2].indexOf(',') != -1
+        chans = split[2].split(',')
+      else
+        chans = [split[2]]
+
+      u = @findUserByNumeric split[0]
+      for chan in chans
+        chan = @getChannelByName chan, true
+        chan.timestamp = split[3]
+        chan.creator = u
+        chan.addUser u, "o", split[3]
+        @channelAdd chan, false
+
+    # ABAAB J #powah 1400577592
+    # ABAAB J 0
+    # ABAAB J #pw1,#pw2 1400577592
+    if split[1] == P10_TOKENS.CHAN_JOIN
+      u = @findUserByNumeric split[0]
+
+      # user left all channels
+      if split[2] == "0"
+        for id,channel of u.channels
+          @channelPart channel, u, 'Leaving all channels'
+        return
+
+      if split[2].indexOf(',') != -1
+        chans = split[2].split(',')
+      else
+        chans = [split[2]]
+
+      # JOINs are propagated with the CreationTS of the channel (P10 specs)
+      # However we already store this value so we prefer to store when the user actually joined
+      ts = Math.round(new Date()/1000);
+      for chan in chans
+        chan = @getChannelByName chan, false
+        @channelJoin chan, u, ts
+
+    # ABAAB L #coucou :Leaving
+    # ABAAB L #powah,#coucou1 :Leaving
+    if split[1] == P10_TOKENS.CHAN_PART
+      u = @findUserByNumeric split[0]
+
+      if split[2].indexOf(',') != -1
+        chans = split[2].split(',')
+      else
+        chans = [split[2]]
+
+      if split[3] != undefined && split[3].indexOf(':') == 0
+        reason = @doubleDotStr(split, 3)
+      else
+        reason = undefined
+
+      for chan in chans
+        chan = @getChannelByName chan, false
+        @channelPart chan, u, reason
+
+    # ABAAA K #powah ABAAB :pwet
+    if split[1] == P10_TOKENS.CHAN_KICK
+      if split[4] != undefined && split[4].indexOf(':') == 0
+        reason = @doubleDotStr(split, 4)
+      else
+        reason = undefined
+
+      @channelKick(@findUserByNumeric(split[0]), @getChannelByName(split[2], false), @findUserByNumeric(split[3]), reason)
+
   serverAdd: (serverName, hops, serverTs, linkTs, description, numeric, bursted = false) ->
     server = new Server serverName, hops, serverTs, linkTs, description, bursted
     server.numeric = numeric
@@ -143,7 +260,7 @@ class IRCu extends Adapter
     return server
 
   userAdd: (nickname, ident, hostname, realname, server, connectionTs, numeric) ->
-    user = new User(nickname; ident, hostname, realname, server, connectionTs)
+    user = new User nickname, ident, hostname, realname, server, connectionTs
     user.numeric = numeric
     super user
     return user
@@ -158,15 +275,9 @@ class IRCu extends Adapter
   sendPong: (timestamp) ->
     @serverSend "#{ P10_TOKENS.PONG } #{ timestamp }"
 
-  findServerByShortNumeric: (shortNumeric) ->
+  findServerByNumeric: (shortNumeric) ->
     for id, server of @servers
       if server.numeric.substr(0,shortNumeric.length) == shortNumeric
-        return server
-    return false
-
-  findMyServer: ->
-    for id, server of @servers
-      if server.hops == 0
         return server
     return false
 

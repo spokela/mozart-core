@@ -3,6 +3,7 @@
 # (c) Spokela 2014
 #
 {EventEmitter} = require 'events'
+{Channel} = require './structs'
 
 IRC_EVENTS = {
   # Mozart-Specific Events
@@ -20,6 +21,14 @@ IRC_EVENTS = {
   USER_NICKCHANGE:    "irc:user-nickchange",
   USER_MODESCHANGE:   "irc:user-modeschange",
   USER_AWAY:          "irc:user-away"
+
+  # Channel Events
+  CHANNEL_BURST:      "irc:channel-burst",
+  CHANNEL_CREATE:     "irc:channel-create",
+  CHANNEL_JOIN:       "irc:channel-join",
+  CHANNEL_PART:       "irc:channel-part",
+  CHANNEL_EMPTY:      "irc:channel-empty",
+  CHANNEL_KICK:       "irc:channel-kick"
 }
 
 class Adapter extends EventEmitter
@@ -27,6 +36,7 @@ class Adapter extends EventEmitter
     @_preParsedTxt = ""
     @servers  = []
     @users    = []
+    @channels = []
 
   init: (@socket) ->
     self = @
@@ -105,6 +115,12 @@ class Adapter extends EventEmitter
     if user.isOper
       user.server.opers--
 
+    for id, channel of user.channels
+      channel.removeUser user
+      if channel.isEmpty()
+        delete @channels[channel.id]
+        @emit IRC_EVENTS.CHANNEL_EMPTY, channel
+
     delete @users[user.id]
     @emit IRC_EVENTS.USER_QUIT, user, reason
 
@@ -139,6 +155,43 @@ class Adapter extends EventEmitter
     user.changeModes modes;
     @emit IRC_EVENTS.USER_MODESCHANGE, user, modes, sender
 
+  channelAdd: (channel, burst = false) ->
+    if channel == false
+      throw new Error 'invalid channel'
+
+    @channels[channel.id] = channel
+    if burst
+      @emit IRC_EVENTS.CHANNEL_BURST, channel
+    else
+      @emit IRC_EVENTS.CHANNEL_CREATE, channel
+
+  channelJoin: (channel, user, ts) ->
+    if channel == false || user == false
+      throw new Error 'invalid channel or user'
+
+    channel.addUser user, "", ts
+    @emit IRC_EVENTS.CHANNEL_JOIN, channel, user
+
+  channelPart: (channel, user, reason) ->
+    if channel == false || user == false
+      throw new Error 'invalid channel or user'
+
+    channel.removeUser user
+    @emit IRC_EVENTS.CHANNEL_PART, channel, user, reason
+    if channel.isEmpty()
+      delete @channels[channel.id]
+      @emit IRC_EVENTS.CHANNEL_EMPTY, channel
+
+  channelKick: (kicker, channel, user, reason) ->
+    if channel == false || user == false || kicker == false
+      throw new Error 'invalid channel, kicker or user'
+
+    channel.removeUser user
+    @emit IRC_EVENTS.CHANNEL_KICK, channel, user, kicker, reason
+    if channel.isEmpty()
+      delete @channels[channel.id]
+      @emit IRC_EVENTS.CHANNEL_EMPTY, channel
+
   disconnect: ->
 
   findUserByNickname: (nickname) ->
@@ -157,5 +210,20 @@ class Adapter extends EventEmitter
     for id, user of @users
       if user.server != undefined && user.server.id == server.id
         @userQuit user, reason
+
+  findMyServer: ->
+    for id, server of @servers
+      if server.hops == 0
+        return server
+    return false
+
+  getChannelByName: (name, create = true) ->
+    for id, channel of @channels
+      if channel.name.toLowerCase() == name.toLowerCase()
+        return channel
+    if create
+      return new Channel name
+    else
+      return false
 
 module.exports = Adapter

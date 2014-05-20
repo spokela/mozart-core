@@ -4,7 +4,8 @@
         "port": 6668,
         "serverName": "services.spoke.la",
         "serverDesc": "Spokela Services",
-        "password": "mozart"
+        "password": "mozart",
+        "numeric": "5AEEE"
     },
     "redis": {
 
