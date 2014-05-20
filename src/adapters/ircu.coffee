@@ -21,6 +21,7 @@ P10_TOKENS = {
   # USER TOKENS
   USER:           "N",
   USER_QUIT:      "Q",
+  USER_KILL:      "D",
   USER_AWAY:      "A",
   USER_ACCOUNT:   "AC",
 
@@ -55,6 +56,9 @@ class IRCu extends Adapter
   parse: (line) ->
     console.log "<  IN: "+ line
     split = line.split " "
+    for idx, spl of split
+      if spl.indexOf("\r") != -1
+        split[idx] = spl.trim()
 
     # AB G !1400504767.778443 services.spoke.la 1400504767.778443
     if split[1] == P10_TOKENS.PING
@@ -159,6 +163,15 @@ class IRCu extends Adapter
 
       @userQuit @findUserByNumeric split[0], reason
 
+    # SP D ADAAB :newserv.spoke.la!newserv.spoke.la (humpf)
+    if split[1] == P10_TOKENS.USER_KILL
+      if split.length > 3 && split[3].indexOf(':') == 0
+        reason = @doubleDotStr(split, 3)
+      else
+        reason = undefined
+
+      @userQuit @findUserByNumeric split[2], "Killed: #{ reason }"
+
     # ADAAB A :brb
     if split[1] == P10_TOKENS.USER_AWAY
       if split.length > 2 && split[2].indexOf(':') == 0
@@ -189,13 +202,13 @@ class IRCu extends Adapter
           modes += ' '+ split[6]
 
       users = split[usersIdx].split(',')
+      umods = ""
       for idx, user of users
         if user.indexOf(':') != -1
           u = @findUserByNumeric(user.split(':')[0].trim())
           umods = user.split(':')[1]
         else
           u = @findUserByNumeric(user.trim())
-          umods = ""
         chan.addUser u, umods.trim(), split[3].trim()
 
       if split[usersIdx+1] != undefined && split[usersIdx+1].indexOf(':') == 0
