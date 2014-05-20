@@ -279,4 +279,9 @@ class Adapter extends EventEmitter
     else
       return false
 
+  emit: (eventName, args...) ->
+    super('zmq', eventName, args)
+    args.unshift eventName
+    super args
+
 module.exports = Adapter

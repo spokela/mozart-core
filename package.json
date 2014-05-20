@@ -25,7 +25,8 @@
 
   "dependencies": {
     "coffee-script": "1.6.3",
-    "node-uuid": "1.4.1"
+    "node-uuid": "1.4.1",
+    "zmq": "2.7.0"
   },
 
   "engines": {

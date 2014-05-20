@@ -8,10 +8,10 @@
         "numeric": "5AEEE",
         "version": "mozart-core/1.0 (c) spokela.com"
     },
-    "redis": {
-
-    },
     "zmq": {
-
+        "publisher": "tcp://127.0.0.1:5551",
+        "pairs": {
+            "test": "tcp://127.0.0.1:5552"
+        }
     }
 }
