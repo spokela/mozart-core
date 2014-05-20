@@ -66,6 +66,11 @@ class IRCu extends Adapter
       s = @serverAdd split[1], split[2], split[3], split[4], @doubleDotStr(split, 8), split[6], split[5] == "J10" ? false : true
       @findMyServer().parent = s;
 
+    # AB S newserv.spoke.la 2 0 1400598331 J10 SPP]] +hs6 :my newserv instance
+    if split[1] == P10_TOKENS.SERVER_SERVER
+      s = @serverAdd(split[2], split[3], split[4], split[5], (split[6] == "J10" ? false : true), split[7], @doubleDotStr(split, 8))
+      s.parent = @findServerByNumeric split[0];
+
     # AB EB
     if split[1] == P10_TOKENS.END_BURST
       server = @findServerByNumeric split[0]
@@ -106,7 +111,11 @@ class IRCu extends Adapter
         if modes.substr(0,1) == '+'
           realNameIdx++
           if modes.indexOf('r') > -1
-            account = split[8]
+            account = split[8].trim()
+            # ircu sends an AccountTs now (since ??)
+            if account.indexOf(':') != -1
+              account = account.split(':')[0]
+
             realNameIdx++
         else
           modes     = ""
@@ -129,11 +138,17 @@ class IRCu extends Adapter
       modes   = @doubleDotStr(split, 3)
       @umodesChange sender, target, modes
 
-    # AB AC AZAAA neiluJ
+    # AB AC AZAAA neiluJ 123456789
+    # AB AC ABAAA neiluJ:123456789 12345789
     if split[1] == P10_TOKENS.USER_ACCOUNT
       sender = @findServerByNumeric split[0]
       target  = @findUserByNumeric split[2]
-      @userAuth sender, target, split[3]
+      account = split[3]
+      # ircu sends an AccountTs now (since ??)
+      if account.indexOf(':') != -1
+        account = split[3].split(':')[0].trim()
+
+      @userAuth sender, target, account
 
     # ADAAB Q :Quit: byebye
     if split[1] == P10_TOKENS.USER_QUIT
@@ -174,14 +189,14 @@ class IRCu extends Adapter
           modes += ' '+ split[6]
 
       users = split[usersIdx].split(',')
-      for user in users
+      for idx, user of users
         if user.indexOf(':') != -1
-          u = @findUserByNumeric(user.split(':')[0])
+          u = @findUserByNumeric(user.split(':')[0].trim())
           umods = user.split(':')[1]
         else
-          u = @findUserByNumeric(user)
+          u = @findUserByNumeric(user.trim())
           umods = ""
-        chan.addUser u, umods.trim(), split[3]
+        chan.addUser u, umods.trim(), split[3].trim()
 
       if split[usersIdx+1] != undefined && split[usersIdx+1].indexOf(':') == 0
         bans = @doubleDotStr(split, usersIdx+1).substr(1).split(' ')

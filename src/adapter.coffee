@@ -98,7 +98,7 @@ class Adapter extends EventEmitter
     @emit IRC_EVENTS.SERVER_QUIT, server, sender, reason
 
     for id, serv of @servers
-      if serv.parent.id == server.id
+      if serv.parent != null && serv.parent.id == server.id
         @deleteUsersFromServer(serv, reason)
         delete @servers[server.id]
 
@@ -124,8 +124,8 @@ class Adapter extends EventEmitter
     for id, channelUser of user.channels
       channelUser.channel.removeUser user
       if channelUser.channel.isEmpty()
-        delete @channels[channel.id]
-        @emit IRC_EVENTS.CHANNEL_EMPTY, channel
+        delete @channels[channelUser.channel.id]
+        @emit IRC_EVENTS.CHANNEL_EMPTY, channelUser.channel
 
     delete @users[user.id]
     @emit IRC_EVENTS.USER_QUIT, user, reason
