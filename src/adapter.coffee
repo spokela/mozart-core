@@ -4,38 +4,7 @@
 #
 {EventEmitter} = require 'events'
 {Channel} = require './structs'
-
-IRC_EVENTS = {
-  # Mozart-Specific Events
-  UPLINK_CONNECTED:   "irc:uplink-connected",
-
-  # Server Events
-  PING:               "irc:ping",
-  SERVER_ENDBURST:    "irc:server-endburst",
-  SERVER_REGISTERED:  "irc:server-registered",
-  SERVER_QUIT:        "irc:server-quit",
-
-  # User Events
-  USER_REGISTERED:    "irc:user-registered",
-  USER_QUIT:          "irc:user-quit",
-  USER_NICKCHANGE:    "irc:user-nickchange",
-  USER_MODESCHANGE:   "irc:user-modeschange",
-  USER_AWAY:          "irc:user-away",
-  USER_AUTH:          "irc:user-auth",
-
-  # Channel Events
-  CHANNEL_BURST:      "irc:channel-burst",
-  CHANNEL_CREATE:     "irc:channel-create",
-  CHANNEL_JOIN:       "irc:channel-join",
-  CHANNEL_PART:       "irc:channel-part",
-  CHANNEL_EMPTY:      "irc:channel-empty",
-  CHANNEL_KICK:       "irc:channel-kick",
-  CHANNEL_UMODE_CHANGE:   "irc:channel-umode-change",
-  CHANNEL_BAN_ADD:    "irc:channel-ban-add"
-  CHANNEL_BAN_REMOVE: "irc:channel-ban-remove",
-  CHANNEL_MODES_CHANGE:   "irc:channel-modes-change",
-  CHANNEL_TOPIC_CHANGE:   "irc:channel-topic-change"
-}
+IRC_EVENTS = require './events'
 
 class Adapter extends EventEmitter
   constructor: (@config) ->
@@ -110,6 +79,7 @@ class Adapter extends EventEmitter
       throw new Error 'invalid user or server'
 
     user.server.users++
+
     @users[user.id] = user
     @emit IRC_EVENTS.USER_REGISTERED, user
 
@@ -118,7 +88,7 @@ class Adapter extends EventEmitter
       throw new Error 'invalid user'
 
     user.server.users--
-    if user.isOper
+    if user.isOper()
       user.server.opers--
 
     for id, channelUser of user.channels
@@ -166,6 +136,7 @@ class Adapter extends EventEmitter
       throw new Error 'invalid sender or user'
 
     user.changeModes modes;
+
     @emit IRC_EVENTS.USER_MODESCHANGE, user, modes, sender
 
   channelAdd: (channel, burst = false) ->
