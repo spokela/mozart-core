@@ -6,7 +6,7 @@ zmq = require 'zmq'
 {EventEmitter} = require 'events'
 
 class Slot extends EventEmitter
-  constructor: (@name, @bindAddr) ->
+  constructor: (@name, @bindAddr, @dispatcher) ->
     @socket = zmq.socket 'rep'
     @socket.bindSync @bindAddr
     self = @
@@ -14,7 +14,20 @@ class Slot extends EventEmitter
       self.handle data
 
   handle: (data) ->
-    console.log "Slot '#{ @name }' message: #{ data }"
-    @socket.send('OK')
+    # ignore empty messages
+    if data == null || data.length <= 0
+      return
+
+    data = data.toString()
+    if data.indexOf('% ') == -1
+      throw new Error "Invalid message recieved on Slot '#{ @name }': #{ data }"
+
+    split = data.split('% ')
+    args =JSON.parse(split[1])
+    args.unshift split[0]
+
+    rep = @dispatcher.exec.apply(@dispatcher, args)
+    console.log rep
+    @socket.send rep
 
 module.exports = Slot

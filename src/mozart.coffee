@@ -5,11 +5,12 @@
 net = require 'net'
 {EventEmitter} = require 'events'
 ZMQManager = require './zmq-manager'
+Dispatcher = require './dispatcher'
 
 class Mozart extends EventEmitter
   constructor: (@config, @adapter) ->
     @socket
-    @zmq = new ZMQManager config.zmq
+    @zmq = new ZMQManager config.zmq, new Dispatcher adapter
     self = @
     adapter.on 'zmq', (eventName, args) ->
       self.zmq.broadcast eventName, args

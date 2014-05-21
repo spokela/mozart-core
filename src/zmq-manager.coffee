@@ -7,10 +7,10 @@ zmq = require 'zmq'
 Slot = require './slot'
 
 class ZMQManager extends EventEmitter
-  constructor: (@config) ->
+  constructor: (@config, @dispatcher) ->
     @slots = []
     @publisher = null
-    @ready = Object.keys(config.pairs).length
+    @ready = Object.keys(config.slots).length
 
   init: ->
     console.log '---------------------------------------------'
@@ -27,8 +27,8 @@ class ZMQManager extends EventEmitter
         self.initSlots()
 
   initSlots: ->
-    for name, bindAddr of @config.pairs
-      @slots[name] = new Slot name, bindAddr
+    for name, bindAddr of @config.slots
+      @slots[name] = new Slot name, bindAddr, @dispatcher
       console.log "ZMQ Slot '#{ name }' ready on #{ bindAddr }"
       @decrReady()
 

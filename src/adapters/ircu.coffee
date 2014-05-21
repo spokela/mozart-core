@@ -94,8 +94,8 @@ class IRCu extends Adapter
       else
         server = @findServerByNumeric split[2]
 
-      if split.length > 3 && split[3].indexOf(':') == 0
-        reason = @doubleDotStr(split, 3)
+      if split.length > 3 && split[4].indexOf(':') == 0
+        reason = @doubleDotStr(split, 4)
       else
         reason = undefined
 
@@ -395,5 +395,35 @@ class IRCu extends Adapter
       if user.numeric == numeric
         return user
     return false
+
+  # COMMANDS
+  # AB N neiluJ 1 1400601383 ~neiluj Dev1.Eu.Spokela.Com +owgr neiluJ:1400601387 B]AAAB ABAAE :julien
+  createUser: (nickname, ident, hostname, realname, umodes = "") ->
+    ts = Math.round(new Date()/1000);
+    user = new User nickname, ident, hostname, realname, @findMyServer(), ts
+
+    @serverSend("#{ P10_TOKENS.USER } #{ nickname } 1 #{ ts } #{ ident } #{ hostname } #{ umodes } B]AAAB #{ @generateUserNumeric() } :#{ realname }")
+
+    user = new User nickname, ident, hostname, realname, @findMyServer(), ts
+    user.changeModes umodes
+
+    super user
+
+  generateUserNumeric: ->
+    s = @findMyServer().numeric.substr(0, 2)
+    generator = (prefix) ->
+      chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+      txt = prefix
+      i = 0
+      while i < 3
+        txt += chars.charAt(Math.floor(Math.random() * chars.length));
+        i++
+      return txt
+
+    num = generator(s)
+    while @findUserByNumeric(num) != false
+      num = generator(s)
+
+    return num
 
 module.exports = IRCu

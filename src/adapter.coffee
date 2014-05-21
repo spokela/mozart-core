@@ -255,4 +255,15 @@ class Adapter extends EventEmitter
     args.unshift eventName
     super args
 
+  # COMMANDS
+  createUser: (user) ->
+    if user == false || user.server == false
+      throw new Error 'invalid user or server'
+
+    user.server.users++
+    @users[user.id] = user
+
+    # @todo define if we need to propagate our own events
+    # @emit IRC_EVENTS.USER_REGISTERED, user
+
 module.exports = Adapter
