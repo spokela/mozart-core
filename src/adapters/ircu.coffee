@@ -17,6 +17,8 @@ P10_TOKENS = {
   SERVER_QUIT:    "SQ",
   END_BURST:      "EB",
   END_ACK:        "EA",
+  RPING:          "RI",
+  RPONG:          "RO"
 
   # USER TOKENS
   USER:           "N",
@@ -45,7 +47,7 @@ class IRCu extends Adapter
   connect: ->
     ts = Math.round(new Date()/1000);
     @send "#{ P10_TOKENS.PASS } #{ @config.password }"
-    @send "#{ P10_TOKENS.SERVER } #{ @config.serverName } 1 #{ ts } #{ ts } J10 #{ @config.numeric } +s :#{ @config.serverDesc }"
+    @send "#{ P10_TOKENS.SERVER } #{ @config.serverName } 1 #{ ts } #{ ts } J10 #{ @config.numeric } +h6s :#{ @config.serverDesc }"
     @serverAdd @config.serverName, 0, ts, ts, @config.serverDesc, @config.numeric, false
     @serverSend "#{ P10_TOKENS.END_BURST }"
 
@@ -67,6 +69,27 @@ class IRCu extends Adapter
     # AB G !1400504767.778443 services.spoke.la 1400504767.778443
     if split[1] == P10_TOKENS.PING
       @handlePing split[4]
+
+    # AD RI 5A SPAAE 1400788900 8610 :RP
+    if split[1] == P10_TOKENS.RPING
+      if split[0].length == 2
+        sender = @findServerByNumeric(split[0])
+      else
+        sender = @findUserByNumeric(split[0])
+
+      target = @findServerByNumeric(split[2])
+      oper = @findUserByNumeric(split[3])
+      ts = split[4]
+      ms = split[5]
+      msg = @doubleDotStr(split, 6)
+      me = @findMyServer()
+
+      # i'm not the target
+      if target.id != me.id
+        @serverSend("#{ P10_TOKENS.RPING } #{ target.numeric } #{ oper.numeric } #{ ts } #{ ms } :#{ msg }")
+      else
+        myTs = Math.round(new Date()/1000)
+        @serverSend("#{ P10_TOKENS.RPONG } #{ oper.numeric } #{ me.name } 0 :#{ msg }")
 
     # SERVER Dev1.Eu.Spokela.Com 1 1400499149 1400505006 J10 ABA]] +h6 :Spokela, Dev server 1
     # This is our uplink \o/
