@@ -109,6 +109,11 @@ class Channel
     delete @users[user.id]
     delete user.channels[@id]
 
+  isUser: (user) ->
+    if !@users[user.id]
+      return false
+    return true
+
   isEmpty: ->
     if Object.keys(@users).length > 0
       return false

@@ -10,7 +10,7 @@ Dispatcher = require './dispatcher'
 class Mozart extends EventEmitter
   constructor: (@config, @adapter) ->
     @socket
-    @zmq = new ZMQManager config.zmq, new Dispatcher adapter
+    @zmq = new ZMQManager config.zmq
     self = @
     adapter.on 'zmq', (eventName, args) ->
       self.zmq.broadcast eventName, args
@@ -30,7 +30,7 @@ class Mozart extends EventEmitter
       console.log '---------------------------------------------'
       console.log 'ZMQ bindings now ready. Connecting to IRC ...'
       self.connect()
-    @zmq.init()
+    @zmq.init(@adapter)
 
   connect: ->
     self = @

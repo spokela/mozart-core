@@ -35,7 +35,10 @@ P10_TOKENS = {
   CHAN_KICK:      "K",
   CHAN_TOPIC:     "T",
   # add support for some popular forks of ircu (nefarious/asuka)
-  CHAN_TBURST:    "TB"
+  CHAN_TBURST:    "TB",
+
+  PRIVMSG:        "P",
+  NOTICE:         "O"
 }
 
 class IRCu extends Adapter
@@ -44,6 +47,7 @@ class IRCu extends Adapter
     @send "#{ P10_TOKENS.PASS } #{ @config.password }"
     @send "#{ P10_TOKENS.SERVER } #{ @config.serverName } 1 #{ ts } #{ ts } J10 #{ @config.numeric } +s :#{ @config.serverDesc }"
     @serverAdd @config.serverName, 0, ts, ts, @config.serverDesc, @config.numeric, false
+    @serverSend "#{ P10_TOKENS.END_BURST }"
 
   send: (line) ->
     console.log "> OUT: "+ line
@@ -107,7 +111,7 @@ class IRCu extends Adapter
     if split[1] == P10_TOKENS.USER
       # it's a new user connected
       if split[4] != undefined
-        server      = @findServerByNumeric split[0]
+        server      = @findServerByNumeric(split[0])
         modes       = split[7]
         realNameIdx = 9
         account     = ""
@@ -124,7 +128,9 @@ class IRCu extends Adapter
         else
           modes     = ""
 
-        u = @userAdd split[2], split[5], split[6], @doubleDotStr(split, realNameIdx), server, split[4], split[realNameIdx-1]
+        u = new User(split[2], split[5], split[6], @doubleDotStr(split, realNameIdx), server, split[4])
+        u.numeric = split[realNameIdx-1]
+        @userAdd(u, false)
         u.changeModes "#{ modes } #{ account }"
 
       # it's a nickname change
@@ -362,17 +368,30 @@ class IRCu extends Adapter
       channel.topic = topic
       channel.topicTs = ts
 
+    # ABAAE P 5ASQN :yo
+    if split[1] == P10_TOKENS.PRIVMSG && split[2].indexOf('#') == -1
+      sender = @findUserByNumeric(split[0])
+      target = @findUserByNumeric(split[2])
+      msg = @doubleDotStr(split, 3)
+      @userMsg sender, target, msg
+
+    if split[1] == P10_TOKENS.PRIVMSG && split[2].indexOf('#') == 0
+      sender = @findUserByNumeric(split[0])
+      target = @findUserByNumeric(split[2])
+      msg = @doubleDotStr(split, 3)
+      @channelMsg sender, target, msg
+
+    if split[1] == P10_TOKENS.NOTICE && split[2].indexOf('#') == 0
+      sender = @findUserByNumeric(split[0])
+      target = @findUserByNumeric(split[2])
+      msg = @doubleDotStr(split, 3)
+      @channelNotice sender, target, msg
+
   serverAdd: (serverName, hops, serverTs, linkTs, description, numeric, bursted = false) ->
     server = new Server serverName, hops, serverTs, linkTs, description, bursted
     server.numeric = numeric
     super server
     return server
-
-  userAdd: (nickname, ident, hostname, realname, server, connectionTs, numeric) ->
-    user = new User nickname, ident, hostname, realname, server, connectionTs
-    user.numeric = numeric
-    super user
-    return user
 
   endOfBurst: (server) ->
     super server
@@ -397,17 +416,150 @@ class IRCu extends Adapter
     return false
 
   # COMMANDS
-  # AB N neiluJ 1 1400601383 ~neiluj Dev1.Eu.Spokela.Com +owgr neiluJ:1400601387 B]AAAB ABAAE :julien
-  createUser: (nickname, ident, hostname, realname, umodes = "") ->
-    ts = Math.round(new Date()/1000);
-    user = new User nickname, ident, hostname, realname, @findMyServer(), ts
+  createFakeUser: (user) ->
+    user.numeric = @generateUserNumeric()
+    @serverSend("#{ P10_TOKENS.USER } #{ user.nickname } 1 #{ user.connectionTs } #{ user.ident } #{ user.hostname } #{ user.modes } B]AAAB #{ user.numeric } :#{ user.realname }")
 
-    @serverSend("#{ P10_TOKENS.USER } #{ nickname } 1 #{ ts } #{ ident } #{ hostname } #{ umodes } B]AAAB #{ @generateUserNumeric() } :#{ realname }")
+    return super user
 
-    user = new User nickname, ident, hostname, realname, @findMyServer(), ts
-    user.changeModes umodes
+  fakeUserQuit: (user, reason) ->
+    if user == false
+      throw new Error 'invalid user'
 
-    super user
+    if !reason
+      @send("#{ user.numeric } #{ P10_TOKENS.USER_QUIT }")
+    else
+      @send("#{ user.numeric } #{ P10_TOKENS.USER_QUIT } :#{ reason }")
+
+    return super user, reason
+
+  fakeUmodesChange: (user, modes) ->
+    if user == false
+      throw new Error 'invalid user'
+
+    @send("#{ user.numeric } #{ P10_TOKENS.MODE } #{ user.nickname } :#{ modes }")
+
+    return super user, modes
+
+  fakeNicknameChange: (user, newnick) ->
+    if user == false
+      throw new Error 'invalid user'
+
+    @send("#{ user.numeric } #{ P10_TOKENS.USER } #{ newnick } #{ Math.round(new Date()/1000) }")
+
+    return super user, newnick
+
+  fakeAway: (user, reason) ->
+    if !user
+      throw new Error 'invalid user'
+    if !reason || reason.trim().length == 0
+      reason = false
+
+    if !reason
+      @send("#{ user.numeric } #{ P10_TOKENS.USER_AWAY }")
+    else
+      @send("#{ user.numeric } #{ P10_TOKENS.USER_AWAY } :#{ reason }")
+
+    return super user, reason
+
+  fakeChannelJoin: (user, channel) ->
+    if !user || !channel
+      throw new Error 'invalid user or channel'
+
+    if channel.isEmpty()
+      @send("#{ user.numeric } #{ P10_TOKENS.CHAN_CREATE } #{ channel.name } #{ Math.round(new Date()/1000) }")
+    else
+      @send("#{ user.numeric } #{ P10_TOKENS.CHAN_JOIN } #{ channel.name } #{ Math.round(new Date()/1000) }")
+
+    return super user, channel, channel.isEmpty()
+
+  fakeChannelPart: (user, channel, reason) ->
+    if !user || !channel
+      throw new Error 'invalid user or channel'
+
+    if !reason || reason.trim().length == 0
+      reason = false
+
+    if !reason
+      @send("#{ user.numeric } #{ P10_TOKENS.CHAN_PART } #{ channel.name }")
+    else
+      @send("#{ user.numeric } #{ P10_TOKENS.CHAN_PART } #{ channel.name } :#{ reason }")
+
+    return super user, channel, reason
+
+  fakeChannelModeChange: (user, channel, modes) ->
+    if !user || !channel
+      throw new Error 'invalid user or channel'
+
+    ts = Math.round(new Date()/1000)
+    @send("#{ user.numeric } #{ P10_TOKENS.MODE } #{ channel.name } #{ modes } #{ channel.timestamp }")
+
+    if modes.indexOf(' ') != -1
+      mds = modes.split(' ')[0]
+      args = modes.substr(modes.indexOf(' ')+1).split(' ')
+    else
+      mds = modes
+      args = []
+
+    operator = ""
+    argsIdx = 0
+    i = 0
+    while i <= mds
+      curr = mds.charAt(i)
+      if curr == '+' || curr == '-'
+        operator = curr
+        i++
+        continue
+
+      else if curr == 'k' && operator == '+'
+        channel.key = args[argsIdx]
+        argsIdx++
+      else if curr == 'k' && operator == '-'
+        channel.key = null
+        argsIdx++
+      else if curr == 'l' && operator == '+'
+        channel.limit = args[argsIdx]
+        argsIdx++
+      else if curr == 'l' && operator == '-'
+        channel.limit = null
+      else if curr == 'b'
+        mask = args[argsIdx]
+        argsIdx++
+        if operator == '+'
+          @channelAddBan user, channel, mask, Math.round(new Date()/1000)
+        else
+          @channelRemoveBan user, channel, mask
+      else if operator == '+'
+        channel.modes += curr
+      else
+        channel.modes = channel.modes.replace curr, ''
+      i++
+
+    return super user, channel, modes
+
+  fakeChannelTopicChange: (user, channel, topic) ->
+    if !user || !channel
+      throw new Error 'invalid user or channel'
+
+    @send("#{ user.numeric } #{ P10_TOKENS.CHAN_TOPIC } #{ channel.name } #{ channel.timestamp } #{ Math.round(new Date()/1000) } :#{ topic }")
+
+    return super user, channel, topic
+
+  fakeChannelPrivmsg: (user, channel, msg, silent = true) ->
+    if !user || !channel
+      throw new Error 'invalid user or channel'
+
+    @send("#{ user.numeric } #{ P10_TOKENS.PRIVMSG } #{ channel.name } :#{ msg }")
+
+    return super user, channel, msg, silent
+
+  fakeChannelNotice: (user, channel, msg, silent = true) ->
+    if !user || !channel
+      throw new Error 'invalid user or channel'
+
+    @send("#{ user.numeric } #{ P10_TOKENS.NOTICE } #{ channel.name } :#{ msg }")
+
+    return super user, channel, msg, silent
 
   generateUserNumeric: ->
     s = @findMyServer().numeric.substr(0, 2)

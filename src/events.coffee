@@ -32,7 +32,17 @@ IRC_EVENTS = {
   CHANNEL_BAN_ADD:    "irc:channel-ban-add"
   CHANNEL_BAN_REMOVE: "irc:channel-ban-remove",
   CHANNEL_MODES_CHANGE:   "irc:channel-modes-change",
-  CHANNEL_TOPIC_CHANGE:   "irc:channel-topic-change"
+  CHANNEL_TOPIC_CHANGE:   "irc:channel-topic-change",
+
+  USER_PRIVMSG:       "irc:user-privmsg",
+  USER_NOTICE:        "irc:user-notice",
+  USER_CTCP:          "irc:user-ctcp",
+
+  CHANNEL_PRIVMSG:    "irc:channel-privmsg",
+  CHANNEL_NOTICE:     "irc:channel-notice",
+  CHANNEL_CTCP:       "irc:channel-ctcp",
+
+  INVITE:             "irc:invite"
 }
 
 module.exports = IRC_EVENTS

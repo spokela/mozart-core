@@ -4,9 +4,11 @@
 #
 zmq = require 'zmq'
 {EventEmitter} = require 'events'
+Dispatcher = require './dispatcher'
 
 class Slot extends EventEmitter
-  constructor: (@name, @bindAddr, @dispatcher) ->
+  constructor: (@name, @bindAddr, adapter) ->
+    @dispatcher = new Dispatcher adapter, @
     @socket = zmq.socket 'rep'
     @socket.bindSync @bindAddr
     self = @

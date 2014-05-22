@@ -74,17 +74,19 @@ class Adapter extends EventEmitter
     @deleteUsersFromServer(server, reason)
     delete @servers[server.id]
 
-  userAdd: (user) ->
-    if user == false || user.server == false
+  userAdd: (user, silent = false) ->
+    if !user || user.server == false
       throw new Error 'invalid user or server'
 
     user.server.users++
 
     @users[user.id] = user
-    @emit IRC_EVENTS.USER_REGISTERED, user
 
-  userQuit: (user, reason) ->
-    if user == false
+    if !silent
+      @emit IRC_EVENTS.USER_REGISTERED, user
+
+  userQuit: (user, reason, silent = false) ->
+    if !user
       throw new Error 'invalid user'
 
     user.server.users--
@@ -95,35 +97,40 @@ class Adapter extends EventEmitter
       channelUser.channel.removeUser user
       if channelUser.channel.isEmpty()
         delete @channels[channelUser.channel.id]
-        @emit IRC_EVENTS.CHANNEL_EMPTY, channelUser.channel
+        if !silent
+          @emit IRC_EVENTS.CHANNEL_EMPTY, channelUser.channel
 
     delete @users[user.id]
-    @emit IRC_EVENTS.USER_QUIT, user, reason
+    if !silent
+      @emit IRC_EVENTS.USER_QUIT, user, reason
 
-  userAway: (user, reason) ->
-    if user == false
+  userAway: (user, reason, silent = false) ->
+    if !user
       throw new Error 'invalid user'
 
     user.away = reason
-    @emit IRC_EVENTS.USER_AWAY, user, reason
+    if !silent
+      @emit IRC_EVENTS.USER_AWAY, user, reason
 
   userAuth: (sender, user, account) ->
-    if user == false
+    if !user
       throw new Error 'invalid user'
 
     user.account = account
     @emit IRC_EVENTS.USER_AUTH, user, account, sender
 
-  nickChange: (user, newNick) ->
-    if user == false
+  nickChange: (user, newNick, silent = false) ->
+    if !user
       throw new Error 'invalid user'
 
     user.lastNickname = user.nickname
     user.nickname = newNick
-    @emit IRC_EVENTS.USER_NICKCHANGE, user
+
+    if !silent
+      @emit IRC_EVENTS.USER_NICKCHANGE, user
 
   endOfBurst: (server) ->
-    if server == false
+    if !server
       throw new Error 'invalid server'
 
     server.bursted = true;
@@ -131,43 +138,54 @@ class Adapter extends EventEmitter
     if server.isUplink()
       @emit IRC_EVENTS.UPLINK_CONNECTED;
 
-  umodesChange: (sender, user, modes) ->
-    if user == false || sender == false
+  umodesChange: (sender, user, modes, silent = false) ->
+    if !user || !sender
       throw new Error 'invalid sender or user'
 
     user.changeModes modes;
 
-    @emit IRC_EVENTS.USER_MODESCHANGE, user, modes, sender
+    if !silent
+      @emit IRC_EVENTS.USER_MODESCHANGE, user, modes, sender
 
-  channelAdd: (channel, burst = false) ->
-    if channel == false
+  channelAdd: (channel, burst = false, silent = false) ->
+    if !channel
       throw new Error 'invalid channel'
 
     @channels[channel.id] = channel
+
+    if silent
+      return
+
     if burst
       @emit IRC_EVENTS.CHANNEL_BURST, channel
     else
       @emit IRC_EVENTS.CHANNEL_CREATE, channel
 
-  channelJoin: (channel, user, ts) ->
-    if channel == false || user == false
+  channelJoin: (channel, user, ts, silent = false) ->
+    if !channel || !user
       throw new Error 'invalid channel or user'
 
     channel.addUser user, "", ts
-    @emit IRC_EVENTS.CHANNEL_JOIN, channel, user
 
-  channelPart: (channel, user, reason) ->
-    if channel == false || user == false
+    if !silent
+      @emit IRC_EVENTS.CHANNEL_JOIN, channel, user
+
+  channelPart: (channel, user, reason, silent = false) ->
+    if !channel || !user
       throw new Error 'invalid channel or user'
 
     channel.removeUser user
-    @emit IRC_EVENTS.CHANNEL_PART, channel, user, reason
+    if !silent
+      @emit IRC_EVENTS.CHANNEL_PART, channel, user, reason
+
     if channel.isEmpty()
       delete @channels[channel.id]
-      @emit IRC_EVENTS.CHANNEL_EMPTY, channel
+
+      if !silent
+        @emit IRC_EVENTS.CHANNEL_EMPTY, channel
 
   channelKick: (kicker, channel, user, reason) ->
-    if channel == false || user == false || kicker == false
+    if !channel || !user || !kicker
       throw new Error 'invalid channel, kicker or user'
 
     channel.removeUser user
@@ -176,36 +194,42 @@ class Adapter extends EventEmitter
       delete @channels[channel.id]
       @emit IRC_EVENTS.CHANNEL_EMPTY, channel
 
-  channelUsermodeChange: (sender, channel, user, modes) ->
-    if sender == false || channel == false || user == false
+  channelUsermodeChange: (sender = null, channel, user, modes, silent = false) ->
+    if !channel || !user
       throw new Error 'invalid sender, channel or user'
 
+    if !channel.isUser(user)
+      return
+
     channel.users[user.id].changeModes(modes)
-    @emit IRC_EVENTS.CHANNEL_UMODE_CHANGE, channel, user, sender, modes
+
+    if !silent
+      @emit IRC_EVENTS.CHANNEL_UMODE_CHANGE, channel, user, sender, modes
 
   channelAddBan: (sender, channel, mask, ts) ->
-    if sender == false || channel == false
+    if !sender || !channel
       throw new Error 'invalid channel or sender'
 
     ban = channel.addBan mask, sender, ts
     @emit IRC_EVENTS.CHANNEL_BAN_ADD, channel, ban, sender
 
   channelRemoveBan: (sender, channel, mask) ->
-    if sender == false || channel == false
+    if !sender || !channel
       throw new Error 'invalid channel or sender'
 
     ban = channel.removeBan mask
     @emit IRC_EVENTS.CHANNEL_BAN_REMOVE, channel, ban, sender
 
-  channelModesChange: (sender, channel, modes, ts) ->
-    if sender == false || channel == false
+  channelModesChange: (sender, channel, modes, ts, silent = false) ->
+    if !sender || !channel
       throw new Error 'invalid channel or sender'
 
     # don't do nothing here because of protocol-specific modes
-    @emit IRC_EVENTS.CHANNEL_MODES_CHANGE, channel, modes, sender, ts
+    if !silent
+      @emit IRC_EVENTS.CHANNEL_MODES_CHANGE, channel, modes, sender, ts
 
-  channelTopicChange: (sender, channel, topic, ts) ->
-    if sender == false || channel == false
+  channelTopicChange: (sender, channel, topic, ts, silent = false) ->
+    if !sender || !channel
       throw new Error 'invalid channel or sender'
 
     if topic.length <= 0
@@ -214,14 +238,47 @@ class Adapter extends EventEmitter
     channel.topic = topic
     channel.topicTs = ts
 
-    @emit IRC_EVENTS.CHANNEL_TOPIC_CHANGE, channel, topic, sender, ts
+    if !silent
+      @emit IRC_EVENTS.CHANNEL_TOPIC_CHANGE, channel, topic, sender, ts
+
+  userMsg: (sender, target, msg, silent = false) ->
+    # don't handle empty msgs
+    if !msg || msg.trim().length == 0
+      return
+
+    if !silent
+      @emit IRC_EVENTS.USER_PRIVMSG, sender, target, msg
+      @emit "#{ IRC_EVENTS.USER_PRIVMSG }@#{ target.id }", sender, target, msg
+
+  channelMsg: (sender, channel, msg, silent = false) ->
+    # don't handle empty msgs
+    if !msg || msg.trim().length == 0
+      return
+
+    if !silent
+      @emit IRC_EVENTS.CHANNEL_PRIVMSG, sender, channel, msg
+      @emit "#{ IRC_EVENTS.CHANNEL_PRIVMSG }@#{ channel.name }", sender, channel, msg
+
+  channelNotice: (sender, channel, msg, silent = false) ->
+    # don't handle empty msgs
+    if !msg || msg.trim().length == 0
+      return
+
+    if !silent
+      @emit IRC_EVENTS.CHANNEL_NOTICE, sender, channel, msg
+      @emit "#{ IRC_EVENTS.CHANNEL_NOTICE }@#{ channel.name }", sender, channel, msg
 
   disconnect: ->
 
   findUserByNickname: (nickname) ->
     for id, user of @users
-      if user.nickname == nickname
+      if user.nickname.toLowerCase() == nickname.toLowerCase()
         return user
+    return false
+
+  findUserById: (id) ->
+    if @users[id] != undefined
+      return @users[id]
     return false
 
   findServerByName: (serverName) ->
@@ -256,14 +313,53 @@ class Adapter extends EventEmitter
     super args
 
   # COMMANDS
-  createUser: (user) ->
-    if user == false || user.server == false
-      throw new Error 'invalid user or server'
+  createFakeUser: (user) ->
+    @userAdd(user, true)
+    return user
 
-    user.server.users++
-    @users[user.id] = user
+  fakeUserQuit: (user, reason) ->
+    @userQuit(user,  reason, true)
+    return true
 
-    # @todo define if we need to propagate our own events
-    # @emit IRC_EVENTS.USER_REGISTERED, user
+  fakeUmodesChange: (user, modes) ->
+    @umodesChange(user, user, modes, true)
+    return true
+
+  fakeNicknameChange: (user, newnick) ->
+    @nickChange(user, newnick, true)
+    return true
+
+  fakeAway: (user, reason) ->
+    @userAway(user, reason, true)
+    return true
+
+  fakeChannelJoin: (user, channel, created = false) ->
+    if created
+      @channelAdd(channel, false, true)
+    @channelJoin(channel, user, Math.round(new Date()/1000), true)
+    if created
+      @channelUsermodeChange(null, channel, user, "+o", true)
+    return true
+
+  fakeChannelPart: (user, channel, reason = null) ->
+    @channelPart(channel, user, reason, true)
+    return true
+
+  fakeChannelModeChange: (user, channel, modes) ->
+    ts = Math.round(new Date()/1000)
+    @channelModesChange(user, channel, modes, ts, true)
+    return true
+
+  fakeChannelTopicChange: (user, channel, topic) ->
+    @channelTopicChange(user, channel, topic, Math.round(new Date()/1000), true)
+    return true
+
+  fakeChannelPrivmsg: (user, channel, msg, silent = true) ->
+    @channelMsg(user, channel, msg, silent)
+    return true
+
+  fakeChannelNotice: (user, channel, msg, silent = true) ->
+    @channelNotice(user, channel, msg, silent)
+    return true
 
 module.exports = Adapter

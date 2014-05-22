@@ -7,12 +7,12 @@ zmq = require 'zmq'
 Slot = require './slot'
 
 class ZMQManager extends EventEmitter
-  constructor: (@config, @dispatcher) ->
+  constructor: (@config) ->
     @slots = []
     @publisher = null
     @ready = Object.keys(config.slots).length
 
-  init: ->
+  init: (adapter) ->
     console.log '---------------------------------------------'
 
     # create publisher socket
@@ -24,11 +24,11 @@ class ZMQManager extends EventEmitter
       else
         console.log "ZMQ Publisher ready on #{ self.config.publisher }"
         self.publisher = socket
-        self.initSlots()
+        self.initSlots(adapter)
 
-  initSlots: ->
+  initSlots: (adapter) ->
     for name, bindAddr of @config.slots
-      @slots[name] = new Slot name, bindAddr, @dispatcher
+      @slots[name] = new Slot name, bindAddr, adapter
       console.log "ZMQ Slot '#{ name }' ready on #{ bindAddr }"
       @decrReady()
 

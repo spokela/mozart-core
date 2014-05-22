@@ -9,7 +9,6 @@ BOT_COMMANDS = {
   NICKNAME:             'bot:nickname',
 
   AWAY:                 'bot:away',
-  AWAY_BACK:            'bot:away-back',
 
   CHANNEL_JOIN:         'bot:chan-join',
   CHANNEL_PART:         'bot:chan-part',
@@ -17,8 +16,6 @@ BOT_COMMANDS = {
   CHANNEL_UMODE:        'bot:chan-umode',
   CHANNEL_TOPIC:        'bot:chan-topic',
   CHANNEL_KICK:         'bot:chan-kick',
-  CHANNEL_BAN:          'bot:chan-ban',
-  CHANNEL_UNBAN:        'bot:chan-unban'
   CHANNEL_PRIVMSG:      'bot:chan-privmsg',
   CHANNEL_NOTICE:       'bot:chan-notice',
   CHANNEL_CTCP:         'bot:chan-ctcp',
@@ -38,8 +35,6 @@ SERVER_COMMANDS = {
   CHANNEL_UMODE:        'server:chan-umode',
   CHANNEL_TOPIC:        'server:chan-topic',
   CHANNEL_KICK:         'server:chan-kick',
-  CHANNEL_BAN:          'server:chan-ban',
-  CHANNEL_UNBAN:        'server:chan-unban'
   CHANNEL_PRIVMSG:      'server:chan-privmsg',
   CHANNEL_NOTICE:       'server:chan-notice',
   CHANNEL_CTCP:         'server:chan-ctcp',
