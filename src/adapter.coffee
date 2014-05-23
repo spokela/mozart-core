@@ -241,32 +241,29 @@ class Adapter extends EventEmitter
     if !silent
       @emit IRC_EVENTS.CHANNEL_TOPIC_CHANGE, channel, topic, sender, ts
 
-  userMsg: (sender, target, msg, silent = false) ->
+  privmsg: (sender, target, msg, silent = false) ->
     # don't handle empty msgs
     if !msg || msg.trim().length == 0
       return
 
-    if !silent
+    if !silent  && target instanceof Channel
+      @emit IRC_EVENTS.CHANNEL_PRIVMSG, sender, target, msg
+      @emit "#{ IRC_EVENTS.CHANNEL_PRIVMSG }@#{ target.name }", sender, target, msg
+    else
       @emit IRC_EVENTS.USER_PRIVMSG, sender, target, msg
       @emit "#{ IRC_EVENTS.USER_PRIVMSG }@#{ target.id }", sender, target, msg
 
-  channelMsg: (sender, channel, msg, silent = false) ->
+  notice: (sender, target, msg, silent = false) ->
     # don't handle empty msgs
     if !msg || msg.trim().length == 0
       return
 
-    if !silent
-      @emit IRC_EVENTS.CHANNEL_PRIVMSG, sender, channel, msg
-      @emit "#{ IRC_EVENTS.CHANNEL_PRIVMSG }@#{ channel.name }", sender, channel, msg
-
-  channelNotice: (sender, channel, msg, silent = false) ->
-    # don't handle empty msgs
-    if !msg || msg.trim().length == 0
-      return
-
-    if !silent
-      @emit IRC_EVENTS.CHANNEL_NOTICE, sender, channel, msg
-      @emit "#{ IRC_EVENTS.CHANNEL_NOTICE }@#{ channel.name }", sender, channel, msg
+    if !silent && target instanceof Channel
+      @emit IRC_EVENTS.CHANNEL_NOTICE, sender, target, msg
+      @emit "#{ IRC_EVENTS.CHANNEL_NOTICE }@#{ target.name }", sender, target, msg
+    else
+      @emit IRC_EVENTS.USER_NOTICE, sender, target, msg
+      @emit "#{ IRC_EVENTS.USER_NOTICE }@#{ target.id }", sender, target, msg
 
   disconnect: ->
 
@@ -321,7 +318,7 @@ class Adapter extends EventEmitter
     @userQuit(user,  reason, true)
     return true
 
-  fakeUmodesChange: (user, modes) ->
+  doUmodesChange: (sender, user, modes) ->
     @umodesChange(user, user, modes, true)
     return true
 
@@ -345,21 +342,21 @@ class Adapter extends EventEmitter
     @channelPart(channel, user, reason, true)
     return true
 
-  fakeChannelModeChange: (user, channel, modes) ->
+  doChannelModeChange: (sender, channel, modes) ->
     ts = Math.round(new Date()/1000)
-    @channelModesChange(user, channel, modes, ts, true)
+    @channelModesChange(sender, channel, modes, ts, true)
     return true
 
-  fakeChannelTopicChange: (user, channel, topic) ->
-    @channelTopicChange(user, channel, topic, Math.round(new Date()/1000), true)
+  fakeChannelTopicChange: (sender, channel, topic) ->
+    @channelTopicChange(sender, channel, topic, Math.round(new Date()/1000), true)
     return true
 
-  fakeChannelPrivmsg: (user, channel, msg, silent = true) ->
-    @channelMsg(user, channel, msg, silent)
+  fakePrivmsg: (sender, target, msg, silent = true) ->
+    @privmsg(sender, target, msg, silent)
     return true
 
-  fakeChannelNotice: (user, channel, msg, silent = true) ->
-    @channelNotice(user, channel, msg, silent)
+  fakeNotice: (sender, target, msg, silent = true) ->
+    @notice(sender, target, msg, silent)
     return true
 
 module.exports = Adapter

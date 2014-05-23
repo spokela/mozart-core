@@ -2,7 +2,7 @@
 # This file is part of Mozart
 # (c) Spokela 2014
 #
-cmds = require './commands'
+{IRC_COMMANDS} = require './commands'
 {User, Server} = require './structs'
 
 STATUS = {
@@ -17,12 +17,15 @@ ERRORS = {
   NICKNAME_INVALID: "invalid nickname",
 
   CHANNEL_INVALID: "invalid channel",
+  TARGET_INVALID: "invalid target",
 
   UNKNOWN_USER: "unknown user",
+  UNKNOWN_TARGET: "unknown target",
   UNKNOWN_CHANNEL: "unknown channel",
   UNKNOWN_CHANNEL_MEMBER: "user not on channel",
-
   UNKNOWN_SERVER: "unknown server",
+
+  NOT_SUPPORTED_PROTOCOL: "invalid command (protocol)"
 
   UNKNOWN_COMMAND: "unknown command",
   UNKNOWN: "unknown error"
@@ -33,7 +36,7 @@ class Dispatcher
 
   exec: (command, args...) ->
     ######################################################
-    # BOT_COMMANDS.CONNECT
+    # IRC_COMMANDS.USER_CONNECT
     #
     # Connects a fake user to the services server
     # Parameters:
@@ -44,22 +47,22 @@ class Dispatcher
     #   - umodes (MUST be prefixed with +)
     # Returns: user id
     #####################################################
-    if command == cmds.BOT_COMMANDS.CONNECT
+    if command == IRC_COMMANDS.USER_CONNECT
       if args.length < 5
         return @format null, false, ERRORS.MISSING_PARAMETERS
-      else
-        ts = Math.round(new Date()/1000);
-        user = new User args[0], args[1], args[2], args[3], @adapter.findMyServer(), ts
-        user.slot = @slot.name
-        if args[4] != undefined && args[4].toString().indexOf('+') == 0
-          user.changeModes args[4]
-        res = @adapter.createFakeUser user
-        if res != user
-          return @format null, false, res
-        return @format user.id
+
+      ts = Math.round(new Date()/1000);
+      user = new User args[0], args[1], args[2], args[3], @adapter.findMyServer(), ts
+      user.slot = @slot.name
+      if args[4] != undefined && args[4].toString().indexOf('+') == 0
+        user.changeModes args[4]
+      res = @adapter.createFakeUser user
+      if res != user
+        return @format null, false, res
+      return @format user.id
 
     ######################################################
-    # BOT_COMMANDS.DISCONNECT
+    # IRC_COMMANDS.USER_QUIT
     #
     # Disconnects a fake user from the services server (/quit)
     # Parameters:
@@ -67,43 +70,62 @@ class Dispatcher
     #   - (optional) quit message
     # Returns: true
     #####################################################
-    else if command == cmds.BOT_COMMANDS.DISCONNECT
+    else if command == IRC_COMMANDS.USER_QUIT
       if args.length < 1
         return @format null, false, ERRORS.MISSING_PARAMETERS
-      else
-        u = @adapter.findUserById args[0]
-        me = @adapter.findMyServer()
-        if u == false || u.server.id != me.id
-          return @format null, false, ERRORS.UNKNOWN_USER
-        res = @adapter.fakeUserQuit u, args[1]
-        if res != true
-          return @format null, false, res
-        return @format true
+
+      if args[0] == null
+        return @format null, false, ERRORS.NOT_SUPPORTED_PROTOCOL
+
+      u = @adapter.findUserById args[0]
+      me = @adapter.findMyServer()
+      if u == false || u.server.id != me.id
+        return @format null, false, ERRORS.UNKNOWN_USER
+
+      res = @adapter.fakeUserQuit u, args[1]
+      if res != true
+        return @format null, false, res
+      return @format true
 
     ######################################################
-    # BOT_COMMANDS.UMODE
+    # IRC_COMMANDS.USER_MODE
     #
-    # Changes user modes of a fake user
+    # Changes user modes of a user
     # Parameters:
-    #   - id of the bot (User)
+    #   - id of the bot (User) or NULL (Server)
+    #   - target nickname of target or NULL (= the bot)
     #   - modes
     # Returns: true
     #####################################################
-    else if command == cmds.BOT_COMMANDS.UMODE
-      if args.length < 2
+    else if command == IRC_COMMANDS.USER_MODE
+      if args.length < 2 || args[2] == null
         return @format null, false, ERRORS.MISSING_PARAMETERS
-      else
+
+      if args[0] != null
         u = @adapter.findUserById args[0]
-        me = @adapter.findMyServer()
-        if u == false || u.server.id != me.id
-          return @format null, false, ERRORS.UNKNOWN_USER
-        res = @adapter.fakeUmodesChange u, args[1]
-        if res != true
-          return @format null, false, res
-        return @format true
+      else
+        u = @adapter.findMyServer()
+
+      me = @adapter.findMyServer()
+      if u == false || (args[0] != null && u.server.id != me.id)
+        return @format null, false, ERRORS.UNKNOWN_USER
+
+      if args[1] != null && args[1].indexOf('#') == 0
+        return @format null, false, ERRORS.TARGET_INVALID
+      else if args[1] == null && args[0] != null
+        target = u
+      else
+        target = @findUserByNickname(args[1])
+        if !target
+          return @format null, false, ERRORS.UNKNOWN_TARGET
+
+      res = @adapter.doUmodesChange u, target, args[2]
+      if res != true
+        return @format null, false, res
+      return @format true
 
     ######################################################
-    # BOT_COMMANDS.NICKNAME
+    # IRC_COMMANDS.USER_NICKNAME
     #
     # Changes the nickname of a fake user
     # Parameters:
@@ -111,25 +133,25 @@ class Dispatcher
     #   - new nickname
     # Returns: true
     #####################################################
-    else if command == cmds.BOT_COMMANDS.NICKNAME
+    else if command == IRC_COMMANDS.USER_NICKNAME
       if args.length < 2
         return @format null, false, ERRORS.MISSING_PARAMETERS
-      else
-        u = @adapter.findUserById args[0]
-        me = @adapter.findMyServer()
-        if u == false || u.server.id != me.id
-          return @format null, false, ERRORS.UNKNOWN_USER
-        if args[1].trim().length <= 0
-          return @format null, false, ERRORS.NICKNAME_INVALID
-        if @adapter.findUserByNickname(args[1]) != false
-          return @format null, false, ERRORS.NICKNAME_ALREADY_USED
-        res = @adapter.fakeNicknameChange u, args[1]
-        if res != true
-          return @format null, false, res
-        return @format true
+
+      u = @adapter.findUserById args[0]
+      me = @adapter.findMyServer()
+      if u == false || u.server.id != me.id
+        return @format null, false, ERRORS.UNKNOWN_USER
+      if args[1].trim().length <= 0
+        return @format null, false, ERRORS.NICKNAME_INVALID
+      if @adapter.findUserByNickname(args[1]) != false
+        return @format null, false, ERRORS.NICKNAME_ALREADY_USED
+      res = @adapter.fakeNicknameChange u, args[1]
+      if res != true
+        return @format null, false, res
+      return @format true
 
     ######################################################
-    # BOT_COMMANDS.AWAY
+    # IRC_COMMANDS.USER_AWAY
     #
     # Mark the fake user as "away"
     # If no message is submitted, the fake user is marked as "back"
@@ -138,22 +160,22 @@ class Dispatcher
     #   - (optional) away message
     # Returns: true
     #####################################################
-    else if command == cmds.BOT_COMMANDS.AWAY
+    else if command == IRC_COMMANDS.USER_AWAY
       if args.length < 1
         return @format null, false, ERRORS.MISSING_PARAMETERS
-      else
-        u = @adapter.findUserById args[0]
-        me = @adapter.findMyServer()
-        if u == false || u.server.id != me.id
-          return @format null, false, ERRORS.UNKNOWN_USER
 
-        res = @adapter.fakeAway u, args[1]
-        if res != true
-          return @format null, false, res
-        return @format true
+      u = @adapter.findUserById args[0]
+      me = @adapter.findMyServer()
+      if u == false || u.server.id != me.id
+        return @format null, false, ERRORS.UNKNOWN_USER
+
+      res = @adapter.fakeAway u, args[1]
+      if res != true
+        return @format null, false, res
+      return @format true
 
     ######################################################
-    # BOT_COMMANDS.CHANNEL_JOIN
+    # IRC_COMMANDS.CHANNEL_JOIN
     #
     # Make the fake user join a channel
     # Parameters:
@@ -161,24 +183,24 @@ class Dispatcher
     #   - channel name
     # Returns: true
     #####################################################
-    else if command == cmds.BOT_COMMANDS.CHANNEL_JOIN
+    else if command == IRC_COMMANDS.CHANNEL_JOIN
       if args.length < 2
         return @format null, false, ERRORS.MISSING_PARAMETERS
-      else
-        u = @adapter.findUserById args[0]
-        me = @adapter.findMyServer()
-        if u == false || u.server.id != me.id
-          return @format null, false, ERRORS.UNKNOWN_USER
-        if args[1].indexOf('#') != 0
-          return @format null, false, ERRORS.CHANNEL_INVALID
-        channel = @adapter.getChannelByName(args[1])
-        res = @adapter.fakeChannelJoin u, channel
-        if res != true
-          return @format null, false, res
-        return @format true
+
+      u = @adapter.findUserById args[0]
+      me = @adapter.findMyServer()
+      if u == false || u.server.id != me.id
+        return @format null, false, ERRORS.UNKNOWN_USER
+      if args[1].indexOf('#') != 0
+        return @format null, false, ERRORS.CHANNEL_INVALID
+      channel = @adapter.getChannelByName(args[1])
+      res = @adapter.fakeChannelJoin u, channel
+      if res != true
+        return @format null, false, res
+      return @format true
 
     ######################################################
-    # BOT_COMMANDS.CHANNEL_PART
+    # IRC_COMMANDS.CHANNEL_PART
     #
     # Make the fake user leave a channel
     # Parameters:
@@ -187,123 +209,139 @@ class Dispatcher
     #   - (optional) reason
     # Returns: true
     #####################################################
-    else if command == cmds.BOT_COMMANDS.CHANNEL_PART
+    else if command == IRC_COMMANDS.CHANNEL_PART
       if args.length < 2
         return @format null, false, ERRORS.MISSING_PARAMETERS
-      else
-        u = @adapter.findUserById args[0]
-        me = @adapter.findMyServer()
-        if u == false || u.server.id != me.id
-          return @format null, false, ERRORS.UNKNOWN_USER
-        if args[1].indexOf('#') != 0
-          return @format null, false, ERRORS.CHANNEL_INVALID
-        channel = @adapter.getChannelByName(args[1], false)
-        if !channel
-          return @format null, false, ERRORS.UNKNOWN_CHANNEL
-        if !channel.isUser(u)
-          return @format null, false, ERRORS.UNKNOWN_CHANNEL_MEMBER
-        res = @adapter.fakeChannelPart u, channel, args[2]
-        if res != true
-          return @format null, false, res
-        return @format true
+
+      u = @adapter.findUserById args[0]
+      me = @adapter.findMyServer()
+      if u == false || u.server.id != me.id
+        return @format null, false, ERRORS.UNKNOWN_USER
+      if args[1].indexOf('#') != 0
+        return @format null, false, ERRORS.CHANNEL_INVALID
+      channel = @adapter.getChannelByName(args[1], false)
+      if !channel
+        return @format null, false, ERRORS.UNKNOWN_CHANNEL
+      if !channel.isUser(u)
+        return @format null, false, ERRORS.UNKNOWN_CHANNEL_MEMBER
+      res = @adapter.fakeChannelPart u, channel, args[2]
+      if res != true
+        return @format null, false, res
+      return @format true
 
     ######################################################
-    # BOT_COMMANDS.CHANNEL_MODE
+    # IRC_COMMANDS.CHANNEL_MODE
     #
-    # Make the fake user change modes of a channel
-    # /!\ This command should NOT be used to change users modes (ovha..) because of protocol-specific features
+    # Make the fake user (or the server) change modes of a channel
     # Parameters:
-    #   - id of the bot (User)
+    #   - id of the bot (User) or NULL if SERVER_COMMANDS.CHANNEL_MODE
     #   - channel name
     #   - modes
     # Returns: true
     #####################################################
-    else if command == cmds.BOT_COMMANDS.CHANNEL_MODE
+    else if command == IRC_COMMANDS.CHANNEL_MODE
       if args.length < 3
         return @format null, false, ERRORS.MISSING_PARAMETERS
-      else
-        u = @adapter.findUserById args[0]
-        me = @adapter.findMyServer()
-        if u == false || u.server.id != me.id
-          return @format null, false, ERRORS.UNKNOWN_USER
-        if args[1].indexOf('#') != 0
-          return @format null, false, ERRORS.CHANNEL_INVALID
-        channel = @adapter.getChannelByName(args[1], false)
-        if !channel
-          return @format null, false, ERRORS.UNKNOWN_CHANNEL
 
-        res = @adapter.fakeChannelModeChange u, channel, args[2]
-        if res != true
-          return @format null, false, res
-        return @format true
+      if args[0] != null
+        u = @adapter.findUserById args[0]
+      else
+        u = @adapter.findMyServer()
+
+      me = @adapter.findMyServer()
+      if u == false || (args[0] != null && u.server.id != me.id)
+        return @format null, false, ERRORS.UNKNOWN_USER
+      if args[1].indexOf('#') != 0
+        return @format null, false, ERRORS.CHANNEL_INVALID
+      channel = @adapter.getChannelByName(args[1], false)
+      if !channel
+        return @format null, false, ERRORS.UNKNOWN_CHANNEL
+
+      res = @adapter.doChannelModeChange u, channel, args[2]
+      if res != true
+        return @format null, false, res
+
+      return @format true
 
     ######################################################
-    # BOT_COMMANDS.CHANNEL_TOPIC
+    # IRC_COMMANDS.CHANNEL_TOPIC
     #
-    # Make the fake user change the topic of a channel
+    # Make the fake user (or the server) change the topic of a channel
     # Parameters:
     #   - id of the bot (User)
     #   - channel name
     #   - topic
     # Returns: true
     #####################################################
-    else if command == cmds.BOT_COMMANDS.CHANNEL_TOPIC
+    else if command == IRC_COMMANDS.CHANNEL_TOPIC
       if args.length < 3
         return @format null, false, ERRORS.MISSING_PARAMETERS
-      else
-        u = @adapter.findUserById args[0]
-        me = @adapter.findMyServer()
-        if u == false || u.server.id != me.id
-          return @format null, false, ERRORS.UNKNOWN_USER
-        if args[1].indexOf('#') != 0
-          return @format null, false, ERRORS.CHANNEL_INVALID
-        channel = @adapter.getChannelByName(args[1], false)
-        if !channel
-          return @format null, false, ERRORS.UNKNOWN_CHANNEL
 
-        res = @adapter.fakeChannelTopicChange u, channel, args[2]
-        if res != true
-          return @format null, false, res
-        return @format true
+      if args[0] != null
+        u = @adapter.findUserById args[0]
+      else
+        u = @adapter.findMyServer()
+
+      me = @adapter.findMyServer()
+      if u == false || (args[0] != null && u.server.id != me.id)
+        return @format null, false, ERRORS.UNKNOWN_USER
+      if args[1].indexOf('#') != 0
+        return @format null, false, ERRORS.CHANNEL_INVALID
+      channel = @adapter.getChannelByName(args[1], false)
+      if !channel
+        return @format null, false, ERRORS.UNKNOWN_CHANNEL
+
+      res = @adapter.fakeChannelTopicChange u, channel, args[2]
+      if res != true
+        return @format null, false, res
+      return @format true
 
     ######################################################
-    # BOT_COMMANDS.CHANNEL_PRIVMSG | BOT_COMMANDS.CHANNEL_PRIVMSG
+    # IRC_COMMANDS.PRIVMSG | IRC_COMMANDS.NOTICE
     #
-    # Make the fake user talk (privmsg or notice) on a channel
+    # Talk (privmsg or notice) to a user or channel
     # Parameters:
-    #   - id of the bot (User)
-    #   - channel name
+    #   - id of the bot (User) or NULL (Server)
+    #   - target (user nickname or channel name)
     #   - message
     #   - (optional) silent (should other bots see the message?) [default = true]
     # Returns: true
     #####################################################
-    else if command == cmds.BOT_COMMANDS.CHANNEL_PRIVMSG || command == cmds.BOT_COMMANDS.CHANNEL_NOTICE
+    else if command == IRC_COMMANDS.PRIVMSG || command == IRC_COMMANDS.NOTICE
       if args.length < 3
         return @format null, false, ERRORS.MISSING_PARAMETERS
-      else
+
+      if args[0] != null
         u = @adapter.findUserById args[0]
-        me = @adapter.findMyServer()
-        if u == false || u.server.id != me.id
-          return @format null, false, ERRORS.UNKNOWN_USER
-        if args[1].indexOf('#') != 0
-          return @format null, false, ERRORS.CHANNEL_INVALID
-        channel = @adapter.getChannelByName(args[1], false)
-        if !channel
+      else
+        u = @adapter.findMyServer()
+
+      me = @adapter.findMyServer()
+      if u == false || (args[0] != null && u.server.id != me.id)
+        return @format null, false, ERRORS.UNKNOWN_USER
+
+      if args[1].indexOf('#') == 0
+        target = @adapter.getChannelByName(args[1], false)
+        if !target
           return @format null, false, ERRORS.UNKNOWN_CHANNEL
+      else
+        target = @adapter.findUserByNickname(args[1])
+        if !target
+          return @format null, false, ERRORS.UNKNOWN_USER
 
-        if args[3] != undefined && (args[3] == false || args[3] == 'false')
-          silent = false
-        else
-          silent = true
+      if args[3] != undefined && (args[3] == false || args[3] == 'false')
+        silent = false
+      else
+        silent = true
 
-        if command == cmds.BOT_COMMANDS.CHANNEL_PRIVMSG
-          res = @adapter.fakeChannelPrivmsg u, channel, args[2], silent
-        else
-          res = @adapter.fakeChannelNotice u, channel, args[2], silent
+      if command == IRC_COMMANDS.PRIVMSG
+        res = @adapter.fakePrivmsg u, target, args[2], silent
+      else
+        res = @adapter.fakeNotice u, target, args[2], silent
 
-        if res != true
-          return @format null, false, res
-        return @format true
+      if res != true
+        return @format null, false, res
+      return @format true
 
     return @format null, false, ERRORS.UNKNOWN_COMMAND
 

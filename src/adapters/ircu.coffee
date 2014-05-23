@@ -392,23 +392,26 @@ class IRCu extends Adapter
       channel.topicTs = ts
 
     # ABAAE P 5ASQN :yo
-    if split[1] == P10_TOKENS.PRIVMSG && split[2].indexOf('#') == -1
+    if split[1] == P10_TOKENS.PRIVMSG
       sender = @findUserByNumeric(split[0])
-      target = @findUserByNumeric(split[2])
-      msg = @doubleDotStr(split, 3)
-      @userMsg sender, target, msg
 
-    if split[1] == P10_TOKENS.PRIVMSG && split[2].indexOf('#') == 0
-      sender = @findUserByNumeric(split[0])
-      target = @findUserByNumeric(split[2])
-      msg = @doubleDotStr(split, 3)
-      @channelMsg sender, target, msg
+      if split[2].indexOf('#') == -1
+        target = @findUserByNumeric(split[2])
+      else
+        target = @getChannelByName(split[2], false)
 
-    if split[1] == P10_TOKENS.NOTICE && split[2].indexOf('#') == 0
-      sender = @findUserByNumeric(split[0])
-      target = @findUserByNumeric(split[2])
       msg = @doubleDotStr(split, 3)
-      @channelNotice sender, target, msg
+      @privmsg sender, target, msg
+
+    if split[1] == P10_TOKENS.NOTICE
+      sender = @findUserByNumeric(split[0])
+      if split[2].indexOf('#') == -1
+        target = @findUserByNumeric(split[2])
+      else
+        target = @getChannelByName(split[2], false)
+
+      msg = @doubleDotStr(split, 3)
+      @notice sender, target, msg
 
   serverAdd: (serverName, hops, serverTs, linkTs, description, numeric, bursted = false) ->
     server = new Server serverName, hops, serverTs, linkTs, description, bursted
@@ -456,13 +459,15 @@ class IRCu extends Adapter
 
     return super user, reason
 
-  fakeUmodesChange: (user, modes) ->
-    if user == false
+  doUmodesChange: (sender, user, modes) ->
+    if !user || !sender
       throw new Error 'invalid user'
 
-    @send("#{ user.numeric } #{ P10_TOKENS.MODE } #{ user.nickname } :#{ modes }")
+    # not ircu compilant when sender != target but some forks support it
+    # @todo SVSMODE / SAMODE check ?
+    @send("#{ sender.numeric } #{ P10_TOKENS.MODE } #{ user.nickname } :#{ modes }")
 
-    return super user, modes
+    return super sender, user, modes
 
   fakeNicknameChange: (user, newnick) ->
     if user == false
@@ -510,15 +515,18 @@ class IRCu extends Adapter
 
     return super user, channel, reason
 
-  fakeChannelModeChange: (user, channel, modes) ->
-    if !user || !channel
-      throw new Error 'invalid user or channel'
+  # @todo Try to make a transaction before applying changes to database because a desync is easy
+  doChannelModeChange: (sender, channel, modes) ->
+    if !sender || !channel
+      throw new Error 'invalid sender or channel'
 
-    ts = Math.round(new Date()/1000)
-    @send("#{ user.numeric } #{ P10_TOKENS.MODE } #{ channel.name } #{ modes } #{ channel.timestamp }")
+    unum = sender.numeric
+    if sender instanceof Server
+      unum = unum.substr(0,2)
 
+    finalArgs = []
     if modes.indexOf(' ') != -1
-      mds = modes.split(' ')[0]
+      mds = modes.substr(0, modes.indexOf(' '))
       args = modes.substr(modes.indexOf(' ')+1).split(' ')
     else
       mds = modes
@@ -527,7 +535,7 @@ class IRCu extends Adapter
     operator = ""
     argsIdx = 0
     i = 0
-    while i <= mds
+    while i <= mds.length
       curr = mds.charAt(i)
       if curr == '+' || curr == '-'
         operator = curr
@@ -536,53 +544,91 @@ class IRCu extends Adapter
 
       else if curr == 'k' && operator == '+'
         channel.key = args[argsIdx]
+        finalArgs.push args[argsIdx]
         argsIdx++
       else if curr == 'k' && operator == '-'
         channel.key = null
+        finalArgs.push args[argsIdx]
         argsIdx++
       else if curr == 'l' && operator == '+'
         channel.limit = args[argsIdx]
+        finalArgs.push args[argsIdx]
         argsIdx++
       else if curr == 'l' && operator == '-'
         channel.limit = null
       else if curr == 'b'
         mask = args[argsIdx]
+        finalArgs.push args[argsIdx]
         argsIdx++
         if operator == '+'
-          @channelAddBan user, channel, mask, Math.round(new Date()/1000)
+          @channelAddBan sender, channel, mask, Math.round(new Date()/1000)
         else
-          @channelRemoveBan user, channel, mask
+          @channelRemoveBan sender, channel, mask
+      else if curr == 'o' || curr == 'v'
+        unick = @findUserByNickname(args[argsIdx])
+        if !unick
+          return 'user not found'
+        else if !channel.isUser(unick)
+          return 'user not on channel'
+
+        channel.users[unick.id].changeModes("#{ operator }#{ curr }")
+        finalArgs.push(unick.numeric)
+        argsIdx++
       else if operator == '+'
         channel.modes += curr
       else
         channel.modes = channel.modes.replace curr, ''
       i++
 
-    return super user, channel, modes
+    @send("#{ unum } #{ P10_TOKENS.MODE } #{ channel.name } #{ mds } #{ finalArgs.join(' ') } #{ channel.timestamp }")
 
-  fakeChannelTopicChange: (user, channel, topic) ->
-    if !user || !channel
-      throw new Error 'invalid user or channel'
+    return super sender, channel, modes
 
-    @send("#{ user.numeric } #{ P10_TOKENS.CHAN_TOPIC } #{ channel.name } #{ channel.timestamp } #{ Math.round(new Date()/1000) } :#{ topic }")
+  fakeChannelTopicChange: (sender, channel, topic) ->
+    if !sender || !channel
+      throw new Error 'invalid sender or channel'
 
-    return super user, channel, topic
+    unum = sender.numeric
+    if sender instanceof Server
+      unum = unum.substr(0,2)
 
-  fakeChannelPrivmsg: (user, channel, msg, silent = true) ->
-    if !user || !channel
-      throw new Error 'invalid user or channel'
+    @send("#{ unum } #{ P10_TOKENS.CHAN_TOPIC } #{ channel.name } #{ channel.timestamp } #{ Math.round(new Date()/1000) } :#{ topic }")
 
-    @send("#{ user.numeric } #{ P10_TOKENS.PRIVMSG } #{ channel.name } :#{ msg }")
+    return super sender, channel, topic
 
-    return super user, channel, msg, silent
+  fakePrivmsg: (sender, target, msg, silent = true) ->
+    if !sender || !target
+      throw new Error 'invalid user or target'
 
-  fakeChannelNotice: (user, channel, msg, silent = true) ->
-    if !user || !channel
-      throw new Error 'invalid user or channel'
+    unum = sender.numeric
+    if sender instanceof Server
+      unum = unum.substr(0,2)
 
-    @send("#{ user.numeric } #{ P10_TOKENS.NOTICE } #{ channel.name } :#{ msg }")
+    if target instanceof User
+      dest = target.numeric
+    else
+      dest = target.name
 
-    return super user, channel, msg, silent
+    @send("#{ unum } #{ P10_TOKENS.PRIVMSG } #{ dest } :#{ msg }")
+
+    return super sender, target, msg, silent
+
+  fakeNotice: (sender, target, msg, silent = true) ->
+    if !sender || !target
+      throw new Error 'invalid sender or target'
+
+    unum = sender.numeric
+    if sender instanceof Server
+      unum = unum.substr(0,2)
+
+    if target instanceof User
+      dest = target.numeric
+    else
+      dest = target.name
+
+    @send("#{ unum } #{ P10_TOKENS.NOTICE } #{ dest } :#{ msg }")
+
+    return super sender, target, msg, silent
 
   generateUserNumeric: ->
     s = @findMyServer().numeric.substr(0, 2)
