@@ -184,15 +184,20 @@ class Adapter extends EventEmitter
       if !silent
         @emit IRC_EVENTS.CHANNEL_EMPTY, channel
 
-  channelKick: (kicker, channel, user, reason) ->
+  channelKick: (kicker, channel, user, reason, silent = false) ->
     if !channel || !user || !kicker
       throw new Error 'invalid channel, kicker or user'
 
     channel.removeUser user
-    @emit IRC_EVENTS.CHANNEL_KICK, channel, user, kicker, reason
+
+    if !silent
+      @emit IRC_EVENTS.CHANNEL_KICK, channel, user, kicker, reason
+
     if channel.isEmpty()
       delete @channels[channel.id]
-      @emit IRC_EVENTS.CHANNEL_EMPTY, channel
+
+      if !silent
+        @emit IRC_EVENTS.CHANNEL_EMPTY, channel
 
   channelUsermodeChange: (sender = null, channel, user, modes, silent = false) ->
     if !channel || !user
@@ -357,6 +362,10 @@ class Adapter extends EventEmitter
 
   fakeNotice: (sender, target, msg, silent = true) ->
     @notice(sender, target, msg, silent)
+    return true
+
+  doChannelKick: (sender, channel, target, reason) ->
+    @channelKick(sender, channel, target, reason, true)
     return true
 
 module.exports = Adapter

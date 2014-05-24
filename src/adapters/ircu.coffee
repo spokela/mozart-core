@@ -630,6 +630,21 @@ class IRCu extends Adapter
 
     return super sender, target, msg, silent
 
+  doChannelKick: (sender, channel, target, reason) ->
+    if !sender || !channel || !target
+      throw new Error 'invalid sender, target or channel'
+
+    unum = sender.numeric
+    if sender instanceof Server
+      unum = unum.substr(0,2)
+
+    if !reason
+      reason = target.nickname
+
+    @send("#{ unum } #{ P10_TOKENS.CHAN_KICK } #{ channel.name } #{ target.numeric } :#{ reason }")
+
+    return super sender, channel, target, reason
+
   generateUserNumeric: ->
     s = @findMyServer().numeric.substr(0, 2)
     generator = (prefix) ->
