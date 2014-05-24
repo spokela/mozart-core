@@ -246,29 +246,29 @@ class Adapter extends EventEmitter
     if !silent
       @emit IRC_EVENTS.CHANNEL_TOPIC_CHANGE, channel, topic, sender, ts
 
-  privmsg: (sender, target, msg, silent = false) ->
+  privmsg: (sender, target, msg, secure, silent = false) ->
     # don't handle empty msgs
     if !msg || msg.trim().length == 0
       return
 
     if !silent  && target instanceof Channel
-      @emit IRC_EVENTS.CHANNEL_PRIVMSG, sender, target, msg
-      @emit "#{ IRC_EVENTS.CHANNEL_PRIVMSG }@#{ target.name }", sender, target, msg
+      @emit IRC_EVENTS.CHANNEL_PRIVMSG, sender, target, msg, secure
+      @emit "#{ IRC_EVENTS.CHANNEL_PRIVMSG }@#{ target.name }", sender, target, msg, secure
     else
-      @emit IRC_EVENTS.USER_PRIVMSG, sender, target, msg
-      @emit "#{ IRC_EVENTS.USER_PRIVMSG }@#{ target.id }", sender, target, msg
+      @emit IRC_EVENTS.USER_PRIVMSG, sender, target, msg, secure
+      @emit "#{ IRC_EVENTS.USER_PRIVMSG }@#{ target.id }", sender, target, msg, secure
 
-  notice: (sender, target, msg, silent = false) ->
+  notice: (sender, target, msg, secure, silent = false) ->
     # don't handle empty msgs
     if !msg || msg.trim().length == 0
       return
 
     if !silent && target instanceof Channel
-      @emit IRC_EVENTS.CHANNEL_NOTICE, sender, target, msg
-      @emit "#{ IRC_EVENTS.CHANNEL_NOTICE }@#{ target.name }", sender, target, msg
+      @emit IRC_EVENTS.CHANNEL_NOTICE, sender, target, msg, secure
+      @emit "#{ IRC_EVENTS.CHANNEL_NOTICE }@#{ target.name }", sender, target, msg, secure
     else
-      @emit IRC_EVENTS.USER_NOTICE, sender, target, msg
-      @emit "#{ IRC_EVENTS.USER_NOTICE }@#{ target.id }", sender, target, msg
+      @emit IRC_EVENTS.USER_NOTICE, sender, target, msg, secure
+      @emit "#{ IRC_EVENTS.USER_NOTICE }@#{ target.id }", sender, target, msg, secure
 
   disconnect: ->
 
@@ -357,11 +357,11 @@ class Adapter extends EventEmitter
     return true
 
   fakePrivmsg: (sender, target, msg, silent = true) ->
-    @privmsg(sender, target, msg, silent)
+    @privmsg(sender, target, msg, false, silent)
     return true
 
   fakeNotice: (sender, target, msg, silent = true) ->
-    @notice(sender, target, msg, silent)
+    @notice(sender, target, msg, false, silent)
     return true
 
   doChannelKick: (sender, channel, target, reason) ->

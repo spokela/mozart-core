@@ -392,26 +392,40 @@ class IRCu extends Adapter
       channel.topicTs = ts
 
     # ABAAE P 5ASQN :yo
+    # ABAAE P TestBot@services.spoke.la :yo
     if split[1] == P10_TOKENS.PRIVMSG
       sender = @findUserByNumeric(split[0])
+      secure = false
 
       if split[2].indexOf('#') == -1
-        target = @findUserByNumeric(split[2])
+        # this is a "secure" privmsg
+        if split[2].indexOf('@') != -1
+          target = @findUserByNickname(split[2].split('@')[0])
+          secure = true
+        else
+          target = @findUserByNumeric(split[2])
       else
         target = @getChannelByName(split[2], false)
 
       msg = @doubleDotStr(split, 3)
-      @privmsg sender, target, msg
+      @privmsg sender, target, msg, secure
 
     if split[1] == P10_TOKENS.NOTICE
       sender = @findUserByNumeric(split[0])
+      secure = false
+
       if split[2].indexOf('#') == -1
-        target = @findUserByNumeric(split[2])
+        # this is a "secure" notice
+        if split[2].indexOf('@') != -1
+          target = @findUserByNickname(split[2].split('@')[0])
+          secure = true
+        else
+          target = @findUserByNumeric(split[2])
       else
         target = @getChannelByName(split[2], false)
 
       msg = @doubleDotStr(split, 3)
-      @notice sender, target, msg
+      @notice sender, target, msg, secure
 
   serverAdd: (serverName, hops, serverTs, linkTs, description, numeric, bursted = false) ->
     server = new Server serverName, hops, serverTs, linkTs, description, bursted
