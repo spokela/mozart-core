@@ -420,6 +420,38 @@ class Dispatcher
         return @format null, false, res
       return @format true
 
+    ######################################################
+    # IRC_COMMANDS.USER_KILL
+    #
+    # Make the fake user (or the server) kill someone
+    # Parameters:
+    #   - id of the bot (User) or NULL (Server)
+    #   - target nickname
+    #   - (optional) reason
+    # Returns: true
+    #####################################################
+    else if command == IRC_COMMANDS.USER_KILL
+      if args.length < 2
+        return @format null, false, ERRORS.MISSING_PARAMETERS
+
+      if args[0] != null
+        u = @adapter.findUserById args[0]
+      else
+        u = @adapter.findMyServer()
+
+      me = @adapter.findMyServer()
+      if u == false || (args[0] != null && u.server.id != me.id)
+        return @format null, false, ERRORS.UNKNOWN_USER
+
+      target = @adapter.findUserByNickname(args[1])
+      if !target
+        return @format null, false, ERRORS.UNKNOWN_TARGET
+
+      res = @adapter.doUserKill u, target, args[2]
+      if res != true
+        return @format null, false, res
+      return @format true
+
     return @format null, false, ERRORS.UNKNOWN_COMMAND
 
   format: (data = null, isOk = true, error = null) ->

@@ -379,4 +379,8 @@ class Adapter extends EventEmitter
     @channelInvite(sender, channel, target, true)
     return true
 
+  doUserKill: (sender, target, reason) ->
+    @userQuit(target, "Killed: #{ reason }", true)
+    return true
+
 module.exports = Adapter

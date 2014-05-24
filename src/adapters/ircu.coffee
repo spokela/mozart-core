@@ -200,7 +200,18 @@ class IRCu extends Adapter
       else
         reason = undefined
 
-      @userQuit @findUserByNumeric split[2], "Killed: #{ reason }"
+      target = @findUserByNumeric split[2]
+      # ircu's behavior is weird with the KILL message (to prevent a desynch)
+      # see discussion with thommey @ quakenet #dev (thanks to him for answering my questions):
+      # <thommey> it sends it back, and the server that got it back doesn't forward it because the client
+      #           is already removed
+      # <thommey> the code comment attempts to illustrate it, but I don't get it
+      # ---
+      # and i don't get it also. so let's just ignore the re-post ATM
+      if !target
+        return
+
+      @userQuit target, "Killed: #{ reason }"
 
     # ADAAB A :brb
     if split[1] == P10_TOKENS.USER_AWAY
@@ -683,6 +694,22 @@ class IRCu extends Adapter
     @send("#{ unum } #{ P10_TOKENS.CHAN_INVITE } #{ target.nickname } #{ channel.name } #{ channel.timestamp }")
 
     return super sender, channel, target
+
+  doUserKill: (sender, target, reason) ->
+    if !sender || !target
+      throw new Error 'invalid sender or target'
+
+    unum = sender.numeric
+    if sender instanceof Server
+      unum = unum.substr(0,2)
+
+    if !reason
+      reason = target.nickname
+
+    me = @findMyServer()
+    @send("#{ unum } #{ P10_TOKENS.USER_KILL } #{ target.numeric } :#{ me.name }!#{ me.name } #{ reason }")
+
+    return super sender, target, reason
 
   generateUserNumeric: ->
     s = @findMyServer().numeric.substr(0, 2)
