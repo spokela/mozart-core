@@ -112,12 +112,24 @@ class Adapter extends EventEmitter
     if !silent
       @emit IRC_EVENTS.USER_AWAY, user, reason
 
-  userAuth: (sender, user, account) ->
+  userAuth: (sender, user, account, silent = true) ->
     if !user
       throw new Error 'invalid user'
 
     user.account = account
-    @emit IRC_EVENTS.USER_AUTH, user, account, sender
+
+    if !silent
+      @emit IRC_EVENTS.USER_AUTH, user, account, sender
+
+  userDeauth: (sender, user, silent = true) ->
+    if !user
+      throw new Error 'invalid user'
+
+    user.account = null
+
+    if !silent
+      @emit IRC_EVENTS.USER_DEAUTH, user, sender
+
 
   nickChange: (user, newNick, silent = false) ->
     if !user
@@ -381,6 +393,14 @@ class Adapter extends EventEmitter
 
   doUserKill: (sender, target, reason) ->
     @userQuit(target, "Killed: #{ reason }", true)
+    return true
+
+  doUserAuth: (sender, target, account) ->
+    @userAuth(sender, target, account, true)
+    return true
+
+  doUserDeauth: (sender, target) ->
+    @userDeauth(sender, target, true)
     return true
 
 module.exports = Adapter

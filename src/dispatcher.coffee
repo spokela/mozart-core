@@ -25,6 +25,8 @@ ERRORS = {
   UNKNOWN_CHANNEL_MEMBER: "user not on channel",
   UNKNOWN_SERVER: "unknown server",
 
+  USER_ALREADY_AUTHED: "user already authed",
+
   NOT_SUPPORTED_PROTOCOL: "invalid command (protocol)"
 
   UNKNOWN_COMMAND: "unknown command",
@@ -448,6 +450,69 @@ class Dispatcher
         return @format null, false, ERRORS.UNKNOWN_TARGET
 
       res = @adapter.doUserKill u, target, args[2]
+      if res != true
+        return @format null, false, res
+      return @format true
+
+    ######################################################
+    # IRC_COMMANDS.USER_AUTH
+    #
+    # Make the fake user or server auth someone
+    # Parameters:
+    #   - id of the bot (User) or NULL (Server)
+    #   - target nickname
+    #   - account name
+    # Returns: true
+    #####################################################
+    else if command == IRC_COMMANDS.USER_AUTH
+      if args.length < 3
+        return @format null, false, ERRORS.MISSING_PARAMETERS
+
+      if args[0] != null
+        u = @adapter.findUserById args[0]
+      else
+        u = @adapter.findMyServer()
+
+      me = @adapter.findMyServer()
+      if u == false || (args[0] != null && u.server.id != me.id)
+        return @format null, false, ERRORS.UNKNOWN_USER
+
+      target = @adapter.findUserByNickname(args[1])
+      if !target
+        return @format null, false, ERRORS.UNKNOWN_TARGET
+
+      res = @adapter.doUserAuth u, target, args[2]
+      if res != true
+        return @format null, false, res
+      return @format true
+
+    ######################################################
+    # IRC_COMMANDS.USER_DEAUTH
+    #
+    # Make the fake user or server de-auth someone
+    # Parameters:
+    #   - id of the bot (User) or NULL (Server)
+    #   - target nickname
+    # Returns: true
+    #####################################################
+    else if command == IRC_COMMANDS.USER_DEAUTH
+      if args.length < 2
+        return @format null, false, ERRORS.MISSING_PARAMETERS
+
+      if args[0] != null
+        u = @adapter.findUserById args[0]
+      else
+        u = @adapter.findMyServer()
+
+      me = @adapter.findMyServer()
+      if u == false || (args[0] != null && u.server.id != me.id)
+        return @format null, false, ERRORS.UNKNOWN_USER
+
+      target = @adapter.findUserByNickname(args[1])
+      if !target
+        return @format null, false, ERRORS.UNKNOWN_TARGET
+
+      res = @adapter.doUserDeauth u, target
       if res != true
         return @format null, false, res
       return @format true

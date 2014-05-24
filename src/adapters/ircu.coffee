@@ -711,6 +711,31 @@ class IRCu extends Adapter
 
     return super sender, target, reason
 
+  doUserAuth: (sender, target, account) ->
+    if !sender || !target
+      throw new Error 'invalid sender or target'
+
+    # ircu only allow AC from servers
+    if sender instanceof User
+      return "invalid command (protocol)"
+
+    if target.account != undefined && target.account != null && target.account.length > 0
+      return "user already authed"
+
+    unum = sender.numeric
+    unum = unum.substr(0,2)
+    ts = Math.round(new Date()/1000);
+
+    @send("#{ unum } #{ P10_TOKENS.USER_ACCOUNT } #{ target.numeric } #{ account } #{ ts }")
+
+    target.accountTs = ts
+
+    return super sender, target, account
+
+  doUserDeauth: (sender, target) ->
+    # ircu doesn't allow de-auth
+    return "invalid command (protocol)"
+
   generateUserNumeric: ->
     s = @findMyServer().numeric.substr(0, 2)
     generator = (prefix) ->
