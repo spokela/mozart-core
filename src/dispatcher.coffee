@@ -383,6 +383,43 @@ class Dispatcher
         return @format null, false, res
       return @format true
 
+    ######################################################
+    # IRC_COMMANDS.CHANNEL_INVITE
+    #
+    # Make the fake user (or the server) invite someone on a channel
+    # Parameters:
+    #   - id of the bot (User) or NULL (Server)
+    #   - channel name
+    #   - target nickname
+    # Returns: true
+    #####################################################
+    else if command == IRC_COMMANDS.CHANNEL_INVITE
+      if args.length < 2
+        return @format null, false, ERRORS.MISSING_PARAMETERS
+
+      if args[0] != null
+        u = @adapter.findUserById args[0]
+      else
+        u = @adapter.findMyServer()
+
+      me = @adapter.findMyServer()
+      if u == false || (args[0] != null && u.server.id != me.id)
+        return @format null, false, ERRORS.UNKNOWN_USER
+      if args[1].indexOf('#') != 0
+        return @format null, false, ERRORS.CHANNEL_INVALID
+      channel = @adapter.getChannelByName(args[1], false)
+      if !channel
+        return @format null, false, ERRORS.UNKNOWN_CHANNEL
+
+      target = @adapter.findUserByNickname(args[2])
+      if !target
+        return @format null, false, ERRORS.UNKNOWN_TARGET
+
+      res = @adapter.doChannelInvite u, channel, target
+      if res != true
+        return @format null, false, res
+      return @format true
+
     return @format null, false, ERRORS.UNKNOWN_COMMAND
 
   format: (data = null, isOk = true, error = null) ->

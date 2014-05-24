@@ -246,6 +246,13 @@ class Adapter extends EventEmitter
     if !silent
       @emit IRC_EVENTS.CHANNEL_TOPIC_CHANGE, channel, topic, sender, ts
 
+  channelInvite: (sender, channel, target, silent = false) ->
+    if !sender || !target || !channel
+      throw new Error 'invalid channel, sender or target'
+
+    if !silent
+      @emit IRC_EVENTS.CHANNEL_INVITE, channel, sender, target
+
   privmsg: (sender, target, msg, secure, silent = false) ->
     # don't handle empty msgs
     if !msg || msg.trim().length == 0
@@ -366,6 +373,10 @@ class Adapter extends EventEmitter
 
   doChannelKick: (sender, channel, target, reason) ->
     @channelKick(sender, channel, target, reason, true)
+    return true
+
+  doChannelInvite: (sender, channel, target) ->
+    @channelInvite(sender, channel, target, true)
     return true
 
 module.exports = Adapter

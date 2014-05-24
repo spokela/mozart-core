@@ -38,6 +38,7 @@ P10_TOKENS = {
   CHAN_TOPIC:     "T",
   # add support for some popular forks of ircu (nefarious/asuka)
   CHAN_TBURST:    "TB",
+  CHAN_INVITE:    "I",
 
   PRIVMSG:        "P",
   NOTICE:         "O"
@@ -427,6 +428,17 @@ class IRCu extends Adapter
       msg = @doubleDotStr(split, 3)
       @notice sender, target, msg, secure
 
+    # ADAAF I TestBot #twilightzone 1400613289
+    if split[1] == P10_TOKENS.INVITE
+      if split[0].length > 2
+        sender = @findUserByNumeric split[0]
+      else
+        sender = @findServerByNumeric split[0]
+
+      target = @findUserByNickname(split[2])
+      channel = @getChannelByName(split[3], false)
+      @channelInvite(sender, channel, target)
+
   serverAdd: (serverName, hops, serverTs, linkTs, description, numeric, bursted = false) ->
     server = new Server serverName, hops, serverTs, linkTs, description, bursted
     server.numeric = numeric
@@ -658,6 +670,19 @@ class IRCu extends Adapter
     @send("#{ unum } #{ P10_TOKENS.CHAN_KICK } #{ channel.name } #{ target.numeric } :#{ reason }")
 
     return super sender, channel, target, reason
+
+  doChannelInvite: (sender, channel, target) ->
+    if !sender || !channel || !target
+      throw new Error 'invalid sender, target or channel'
+
+    unum = sender.numeric
+    if sender instanceof Server
+      # not supported by ircu
+      return "invalid command (protocol)"
+
+    @send("#{ unum } #{ P10_TOKENS.CHAN_INVITE } #{ target.nickname } #{ channel.name } #{ channel.timestamp }")
+
+    return super sender, channel, target
 
   generateUserNumeric: ->
     s = @findMyServer().numeric.substr(0, 2)
