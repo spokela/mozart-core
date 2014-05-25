@@ -3,7 +3,7 @@
 # (c) Spokela 2014
 #
 {EventEmitter} = require 'events'
-{Channel} = require './structs'
+{Channel, User} = require './structs'
 IRC_EVENTS = require './events'
 
 class Adapter extends EventEmitter
@@ -270,24 +270,50 @@ class Adapter extends EventEmitter
     if !msg || msg.trim().length == 0
       return
 
-    if !silent  && target instanceof Channel
-      @emit IRC_EVENTS.CHANNEL_PRIVMSG, sender, target, msg, secure
-      @emit "#{ IRC_EVENTS.CHANNEL_PRIVMSG }@#{ target.name }", sender, target, msg, secure
+    chr = String.fromCharCode(1)
+    if msg.charAt(0) == chr && msg.charAt(msg.length-1) == chr
+      ctcp = true
+      msg = msg.substr(1,msg.length-2).toUpperCase()
     else
-      @emit IRC_EVENTS.USER_PRIVMSG, sender, target, msg, secure
-      @emit "#{ IRC_EVENTS.USER_PRIVMSG }@#{ target.id }", sender, target, msg, secure
+      ctcp = false
+
+    if !silent && target instanceof Channel
+      if ctcp
+        @emit IRC_EVENTS.CHANNEL_CTCP, sender, target, msg, secure
+        @emit "#{ IRC_EVENTS.CHANNEL_CTCP }@#{ target.name }", sender, target, msg, secure
+      else
+        @emit IRC_EVENTS.CHANNEL_PRIVMSG, sender, target, msg, secure
+        @emit "#{ IRC_EVENTS.CHANNEL_PRIVMSG }@#{ target.name }", sender, target, msg, secure
+    else if !silent && target instanceof User
+      if ctcp
+        @emit IRC_EVENTS.USER_CTCP, sender, target, msg, secure
+        @emit "#{ IRC_EVENTS.USER_CTCP }@#{ target.id }", sender, target, msg, secure
+      else
+        @emit IRC_EVENTS.USER_PRIVMSG, sender, target, msg, secure
+        @emit "#{ IRC_EVENTS.USER_PRIVMSG }@#{ target.id }", sender, target, msg, secure
 
   notice: (sender, target, msg, secure, silent = false) ->
     # don't handle empty msgs
     if !msg || msg.trim().length == 0
       return
 
+    chr = String.fromCharCode(1)
+    if msg.charAt(0) == chr && msg.charAt(msg.length-1) == chr
+      ctcp = true
+      msg = msg.substr(1,msg.length-2)
+    else
+      ctcp = false
+
     if !silent && target instanceof Channel
       @emit IRC_EVENTS.CHANNEL_NOTICE, sender, target, msg, secure
       @emit "#{ IRC_EVENTS.CHANNEL_NOTICE }@#{ target.name }", sender, target, msg, secure
-    else
-      @emit IRC_EVENTS.USER_NOTICE, sender, target, msg, secure
-      @emit "#{ IRC_EVENTS.USER_NOTICE }@#{ target.id }", sender, target, msg, secure
+    else if !silent && target instanceof User
+      if ctcp
+        @emit IRC_EVENTS.CTCP_REPLY, sender, target, msg, secure
+        @emit "#{ IRC_EVENTS.CTCP_REPLY }@#{ target.id }", sender, target, msg, secure
+      else
+        @emit IRC_EVENTS.USER_NOTICE, sender, target, msg, secure
+        @emit "#{ IRC_EVENTS.USER_NOTICE }@#{ target.id }", sender, target, msg, secure
 
   disconnect: ->
 

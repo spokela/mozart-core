@@ -309,7 +309,7 @@ class Dispatcher
     #   - (optional) silent (should other bots see the message?) [default = true]
     # Returns: true
     #####################################################
-    else if command == IRC_COMMANDS.PRIVMSG || command == IRC_COMMANDS.NOTICE
+    else if command == IRC_COMMANDS.PRIVMSG || command == IRC_COMMANDS.NOTICE || command == IRC_COMMANDS.CTCP || command == IRC_COMMANDS.CTCP_REPLY
       if args.length < 3
         return @format null, false, ERRORS.MISSING_PARAMETERS
 
@@ -338,8 +338,12 @@ class Dispatcher
 
       if command == IRC_COMMANDS.PRIVMSG
         res = @adapter.fakePrivmsg u, target, args[2], silent
-      else
+      else if command == IRC_COMMANDS.NOTICE
         res = @adapter.fakeNotice u, target, args[2], silent
+      else if command == IRC_COMMANDS.CTCP
+        res = @adapter.fakePrivmsg u, target, String.fromCharCode(1) + args[2] + String.fromCharCode(1), silent
+      else if command == IRC_COMMANDS.CTCP_REPLY
+        res = @adapter.fakeNotice u, target, String.fromCharCode(1) + args[2] + String.fromCharCode(1), silent
 
       if res != true
         return @format null, false, res

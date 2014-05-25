@@ -22,6 +22,7 @@ IRC_COMMANDS = {
   PRIVMSG:              'irc:privmsg',
   NOTICE:               'irc:notice',
   CTCP:                 'irc:ctcp',
+  CTCP_REPLY:           'irc:ctcp-reply',
 
   SERVER_QUIT:          'irc:squit',
   SERVER_JUPE_ADD:      'server:jupe-add',
