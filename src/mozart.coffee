@@ -42,6 +42,9 @@ class Mozart extends EventEmitter
     @socket = net.connect {port: self.config.irc.port, host: self.config.irc.hostname}, () ->
       self.connected = true
       self.adapter.init self.socket
+      if self.retryTimer != null
+        clearTimeout(self.retryTimer)
+        self.retryTimer = null
 
     @socket.on 'error', (err) ->
       self.disconnect err
