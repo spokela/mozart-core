@@ -28,9 +28,23 @@ class ZMQManager extends EventEmitter
 
   initSlots: (adapter) ->
     for name, bindAddr of @config.slots
-      @slots[name] = new Slot name, bindAddr, adapter
-      console.log "ZMQ Slot '#{ name }' ready on #{ bindAddr }"
+      @slots[name] = new Slot name, bindAddr, adapter, @config.heartbeat
+
+      @slots[name].on 'ready', ->
+        console.log "ZMQ Slot '#{ name }' ready on #{ bindAddr }"
+
+      @slots[name].on 'end', (reason) ->
+        if null == reason
+          reason = 'No reason provided'
+
+        console.log "ZMQ Slot '#{ name }' ended: #{ reason }"
+
+      @slots[name].on 'client', ->
+        console.log "ZMQ Slot '#{ name }' has a client connected!"
+
+      @slots[name].init()
       @decrReady()
+    @ready = Object.keys(@slots).length
 
   decrReady: ->
     @ready--
@@ -42,5 +56,14 @@ class ZMQManager extends EventEmitter
 
   serialize: (args) ->
     return JSON.stringify(args)
+
+  end: (reason = null) ->
+    for name, slot of @slots
+      slot.end(reason, false)
+
+    if @publisher != null
+      @publisher.close()
+      console.log 'ZMG Publisher ended.'
+      @publisher = null
 
 module.exports = ZMQManager

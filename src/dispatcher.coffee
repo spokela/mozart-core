@@ -61,6 +61,13 @@ class Dispatcher
       res = @adapter.createFakeUser user
       if res != user
         return @format null, false, res
+
+      self = @
+      @slot.on 'end', (reason) ->
+        user = self.adapter.findUserById(user.id)
+        if user != false
+          self.adapter.fakeUserQuit user, reason
+
       return @format user.id
 
     ######################################################

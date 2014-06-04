@@ -9,6 +9,7 @@
         "version": "mozart-core/1.0 (c) spokela.com"
     },
     "zmq": {
+        "heartbeat": 5,
         "publisher": "tcp://127.0.0.1:5551",
         "slots": {
             "test": "tcp://127.0.0.1:5552"
