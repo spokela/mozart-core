@@ -528,6 +528,38 @@ class Dispatcher
         return @format null, false, res
       return @format true
 
+    ######################################################
+    # IRC_COMMANDS.SERVER_QUIT
+    #
+    # Make the fake user or server squit a server
+    # Parameters:
+    #   - id of the bot (User) or NULL (Server)
+    #   - target server name
+    #   - (optional) reason
+    # Returns: true
+    #####################################################
+    else if command == IRC_COMMANDS.SERVER_QUIT
+      if args.length < 2
+        return @format null, false, ERRORS.MISSING_PARAMETERS
+
+      if args[0] != null
+        u = @adapter.findUserById args[0]
+      else
+        u = @adapter.findMyServer()
+
+      me = @adapter.findMyServer()
+      if u == false || (args[0] != null && u.server.id != me.id)
+        return @format null, false, ERRORS.UNKNOWN_USER
+
+      target = @adapter.findServerByName(args[1])
+      if !target
+        return @format null, false, ERRORS.UNKNOWN_TARGET
+
+      res = @adapter.doServerQuit u, target, args[3]
+      if res != true
+        return @format null, false, res
+      return @format true
+
     return @format null, false, ERRORS.UNKNOWN_COMMAND
 
   format: (data = null, isOk = true, error = null) ->

@@ -18,9 +18,6 @@ class Adapter extends EventEmitter
     @socket.on "data", (data) ->
       self.preParse new String(data)
 
-    @socket.on "end", () ->
-      console.log "socket end";
-
     @connect()
 
   preParse: (data) ->
@@ -49,6 +46,14 @@ class Adapter extends EventEmitter
 
   parse: (line) ->
 
+  connect: ->
+    console.log 'uplink connected'
+    @emit IRC_EVENTS.UPLINK_CONNECTED
+
+  disconnect: (reason) ->
+    console.log 'uplink disconnected'
+    @emit IRC_EVENTS.UPLINK_DISCONNECTED
+
   handlePing: (timestamp) ->
     @emit IRC_EVENTS.PING, timestamp
     @sendPong timestamp
@@ -60,11 +65,9 @@ class Adapter extends EventEmitter
     @servers[server.id] = server
     @emit IRC_EVENTS.SERVER_REGISTERED, server
 
-  serverQuit: (server, sender, reason) ->
+  serverQuit: (server, sender, reason, silent = false) ->
     if server == false
       throw new Error 'invalid server'
-
-    @emit IRC_EVENTS.SERVER_QUIT, server, sender, reason
 
     for id, serv of @servers
       if serv.parent != null && serv.parent.id == server.id
@@ -73,6 +76,9 @@ class Adapter extends EventEmitter
 
     @deleteUsersFromServer(server, reason)
     delete @servers[server.id]
+
+    if !silent
+      @emit IRC_EVENTS.SERVER_QUIT, server, sender, reason
 
   userAdd: (user, silent = false) ->
     if !user || user.server == false
@@ -427,6 +433,10 @@ class Adapter extends EventEmitter
 
   doUserDeauth: (sender, target) ->
     @userDeauth(sender, target, true)
+    return true
+
+  doServerQuit: (sender, target, reason) ->
+    @serverQuit(target, sender, reason, true)
     return true
 
 module.exports = Adapter

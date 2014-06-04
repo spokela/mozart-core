@@ -6,6 +6,8 @@
 IRC_EVENTS = {
 # Mozart-Specific Events
   UPLINK_CONNECTED:   "irc:uplink-connected",
+  UPLINK_DISCONNECTED: "irc:uplink-disconnected",
+
   MZ_CORE_EXIT:       "mz:core:exit",
   MZ_CLIENT_EXIT:     "mz:client:exit",
 

@@ -11,6 +11,8 @@ class Mozart extends EventEmitter
   constructor: (@config, @adapter) ->
     @socket
     @zmq = new ZMQManager config.zmq
+    @retryTimer = null
+    @connected = false
     self = @
     adapter.on 'zmq', (eventName, args) ->
       self.zmq.broadcast eventName, args
@@ -37,7 +39,20 @@ class Mozart extends EventEmitter
   connect: ->
     self = @
     @socket = net.connect {port: self.config.irc.port, host: self.config.irc.hostname}, () ->
+      self.connected = true
       self.adapter.init self.socket
+
+    @socket.on 'error', (err) ->
+      self.disconnect err
+
+    @socket.on 'end', () ->
+      self.connected = false
+
+    @socket.on 'close', (hadError) ->
+      if hadError
+        self.disconnect "socket error"
+      else
+        self.disconnect "remote closed connection"
 
   registerExitHandlers: ->
     # prevent the program to exit instantly
@@ -63,5 +78,55 @@ class Mozart extends EventEmitter
     # register handlers
     process.on('SIGINT', exitHandler.bind(null, false, true));
     process.on('uncaughtException', exitHandler.bind(null, false, true));
+
+  disconnect: (reason = null) ->
+    if @socket != null
+      if @connected
+        @adapter.disconnect(reason)
+        @socket.end()
+
+      @socket.destroy()
+      @socket = null
+
+    console.log "IRC Connection closed: #{ reason }"
+    @retry(0)
+
+  retry: (step) ->
+    if !@config.socket.retry
+      @zmq.end 'IRC Connection lost'
+      process.exit(1)
+      return
+
+    if @retryTimer != null
+      if @connected
+        clearTimeout(@retryTimer)
+        @retryTimer = null
+        return
+
+      if @config.socket.maxRetries == 0
+        max = "unlimited"
+      else
+        max = @config.socket.maxRetries
+
+      console.log("Connecting to IRC... (retry #{ step }/#{ max })")
+      @connect()
+      return
+
+    if @config.socket.maxRetries > 0 && step > @config.socket.maxRetries
+      if !@connected
+        @zmq.end 'IRC Connection lost'
+        process.exit(1)
+        return
+      clearTimeout(@retryTimer)
+      @retryTimer = null
+      return
+
+    self = @
+    func = ->
+      self.retry(step+1)
+
+    console.log("Reconnection attempt in #{ @config.socket.retryDelay } seconds...")
+    @retryTimer = setTimeout(func, @config.socket.retryDelay*1000)
+
 
 module.exports = Mozart

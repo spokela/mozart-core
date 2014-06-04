@@ -3,7 +3,7 @@
 # (c) Spokela 2014
 #
 Adapter = require '../adapter'
-{Server, User} = require '../structs'
+{Server, User, Channel} = require '../structs'
 
 P10_TOKENS = {
   # PING? PONG!
@@ -51,6 +51,12 @@ class IRCu extends Adapter
     @send "#{ P10_TOKENS.SERVER } #{ @config.serverName } 1 #{ ts } #{ ts } J10 #{ @config.numeric } +h6s :#{ @config.serverDesc }"
     @serverAdd @config.serverName, 0, ts, ts, @config.serverDesc, @config.numeric, false
     @serverSend "#{ P10_TOKENS.END_BURST }"
+    return super()
+
+  disconnect: (reason) ->
+    me = @findMyServer()
+    @doServerQuit(me, me, reason)
+    return super()
 
   send: (line) ->
     console.log "> OUT: "+ line
@@ -731,6 +737,21 @@ class IRCu extends Adapter
     target.accountTs = ts
 
     return super sender, target, account
+
+  doServerQuit: (sender, target, reason = "no reason") ->
+    if !sender || !target
+      throw new Error 'invalid sender or target'
+
+    unum = sender.numeric
+    if sender instanceof Server
+      unum = unum.substr(0,2)
+
+    if target instanceof User || target instanceof Channel
+      return "invalid target"
+
+    @send("#{ unum } #{ P10_TOKENS.SERVER_QUIT } #{ target.name } 0 :#{ reason }")
+
+    return super sender, target, reason
 
   doUserDeauth: (sender, target) ->
     # ircu doesn't allow de-auth
