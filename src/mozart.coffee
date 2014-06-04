@@ -80,7 +80,7 @@ class Mozart extends EventEmitter
     process.on('SIGINT', exitHandler.bind(null, false, true));
     process.on('uncaughtException', exitHandler.bind(null, false, true));
 
-  disconnect: (reason = null) ->
+  disconnect: (reason = null, retry = true) ->
     if @socket != null
       if @connected
         @adapter.disconnect(reason)
@@ -90,7 +90,15 @@ class Mozart extends EventEmitter
       @socket = null
 
     console.log "IRC Connection closed: #{ reason }"
-    @retry(0)
+
+    if @noRetry != undefined
+      retry = !@noRetry
+    else if !retry
+      @noRetry = true
+
+    if retry
+      @noRetry = undefined
+      @retry(0)
 
   retry: (step) ->
     if !@config.socket.retry
