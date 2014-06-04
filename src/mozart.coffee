@@ -18,6 +18,7 @@ class Mozart extends EventEmitter
       self.zmq.broadcast eventName, args
 
     @registerExitHandlers()
+    process.title = 'mozart-core'
 
   start: ->
     console.log "                                 _   "
@@ -94,7 +95,7 @@ class Mozart extends EventEmitter
   retry: (step) ->
     if !@config.socket.retry
       @zmq.end 'IRC Connection lost'
-      process.exit(1)
+      process.exit(0)
       return
 
     if @retryTimer != null
