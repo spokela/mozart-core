@@ -6,6 +6,7 @@ net = require 'net'
 {EventEmitter} = require 'events'
 ZMQManager = require './zmq-manager'
 Dispatcher = require './dispatcher'
+IRC_EVENTS = require './events'
 
 class Mozart extends EventEmitter
   constructor: (@config, @adapter) ->
@@ -45,6 +46,7 @@ class Mozart extends EventEmitter
       if self.retryTimer != null
         clearTimeout(self.retryTimer)
         self.retryTimer = null
+
 
     @socket.on 'error', (err) ->
       self.disconnect err
@@ -93,6 +95,8 @@ class Mozart extends EventEmitter
       @socket = null
 
     console.log "IRC Connection closed: #{ reason }"
+    @adapter.emit IRC_EVENTS.UPLINK_DISCONNECTED
+    @adapter.cleanup()
 
     if @noRetry != undefined
       retry = !@noRetry

@@ -46,13 +46,19 @@ class Adapter extends EventEmitter
 
   parse: (line) ->
 
+  disconnect: (reason) ->
+
+  cleanup: ->
+    delete @servers
+    delete @users
+    delete @channels
+    @servers  = []
+    @users    = []
+    @channels = []
+
   connect: ->
     console.log 'uplink connected'
     @emit IRC_EVENTS.UPLINK_CONNECTED
-
-  disconnect: (reason) ->
-    console.log 'uplink disconnected'
-    @emit IRC_EVENTS.UPLINK_DISCONNECTED
 
   handlePing: (timestamp) ->
     @emit IRC_EVENTS.PING, timestamp
